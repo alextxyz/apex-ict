@@ -1471,8 +1471,11 @@ async function updateConviction(){
   bar.style.width=((cv.score/cv.max)*100)+'%';
   bar.style.background=color;
 
-  // delta indicator
+  // detect score change
   const prev=S.lastConvScore;
+  S.lastConvScore=cv.score;
+
+  // delta indicator
   const deltaEl=document.getElementById('convDelta');
   if(prev!==null&&prev!==cv.score){
     const d=cv.score-prev;
@@ -1482,11 +1485,7 @@ async function updateConviction(){
     deltaEl.textContent='';
   }
 
-  // detect score change and alert agent
-  const prev=S.lastConvScore;
-  S.lastConvScore=cv.score;
-  if(prev===null){return;} // first run, no comparison yet
-
+  if(prev===null){return;} // first run, no comparison
   const delta=cv.score-prev;
   if(delta===0)return; // no change, stay silent
 
