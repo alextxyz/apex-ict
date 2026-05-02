@@ -536,10 +536,15 @@ async function fetchAll(){
   ];
   for(const df of defs){
     try{
+      log(`Fetching ${df.i}…`);
       const c=await fetchTD(sym,df.i,df.s);
-      S.candles[df.k]=c;S.series[df.k].setData(c);
-      S.charts[df.k].timeScale().fitContent();setMeta(df.mid,c);
-      await new Promise(r=>setTimeout(r,350));
+      S.candles[df.k]=c;
+      S.series[df.k].setData(c);
+      S.charts[df.k].timeScale().fitContent();
+      setMeta(df.mid,c);
+      log(`${df.i} OK`,'ok');
+      // wait 8s between calls to stay under 8 req/min limit
+      await new Promise(r=>setTimeout(r,8000));
     }catch(e){log(`${df.i} error: ${e.message}`,'err');}
   }
 }
@@ -864,7 +869,7 @@ function startSync(){
         const c5=await fetchTD(sym,'5min',100);
         S.candles.M5=c5;S.series.M5.setData(c5);
         S.charts.M5.timeScale().fitContent();setMeta('meta-M5',c5);
-        await new Promise(r=>setTimeout(r,350));
+        await new Promise(r=>setTimeout(r,8000));
         const c15=await fetchTD(sym,'15min',100);
         S.candles.M15=c15;S.series.M15.setData(c15);
         S.charts.M15.timeScale().fitContent();setMeta('meta-M15',c15);
