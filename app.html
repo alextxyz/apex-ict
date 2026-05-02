@@ -125,6 +125,35 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .chat-send:hover{background:#00bcd4}
 .chat-send:disabled{opacity:.4;cursor:not-allowed}
 
+/* POPUP NOTIFICATION */
+.popup-wrap{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:10px;pointer-events:none;max-width:360px}
+.popup{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:14px 16px;pointer-events:all;transform:translateX(400px);opacity:0;transition:all .4s cubic-bezier(.175,.885,.32,1.275);position:relative;overflow:hidden;cursor:pointer}
+.popup.show{transform:translateX(0);opacity:1}
+.popup.hide{transform:translateX(400px);opacity:0}
+.popup::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.popup.type-analysis::before{background:var(--accent)}
+.popup.type-trade::before{background:var(--bull)}
+.popup.type-trade.bear::before{background:var(--bear)}
+.popup.type-alert::before{background:var(--gold)}
+.popup.type-update::before{background:var(--purple)}
+.popup-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.popup-tag{font-size:.46rem;letter-spacing:.12em;font-weight:700;padding:2px 7px;border-radius:2px}
+.popup-tag.analysis{background:rgba(0,212,255,.12);color:var(--accent);border:1px solid rgba(0,212,255,.3)}
+.popup-tag.trade{background:rgba(0,230,118,.12);color:var(--bull);border:1px solid rgba(0,230,118,.3)}
+.popup-tag.trade.bear{background:rgba(255,61,87,.12);color:var(--bear);border:1px solid rgba(255,61,87,.3)}
+.popup-tag.alert{background:rgba(240,180,41,.12);color:var(--gold);border:1px solid rgba(240,180,41,.3)}
+.popup-tag.update{background:rgba(167,139,250,.12);color:var(--purple);border:1px solid rgba(167,139,250,.3)}
+.popup-close{font-size:.7rem;color:var(--muted);cursor:pointer;line-height:1;padding:0 4px}
+.popup-close:hover{color:var(--text)}
+.popup-body{font-size:.65rem;line-height:1.7;color:var(--text)}
+.popup-time{font-size:.48rem;color:var(--muted);margin-top:6px}
+.popup-progress{position:absolute;bottom:0;left:0;height:2px;background:rgba(255,255,255,.1);width:100%;transform-origin:left}
+
+/* AGENT STATUS */
+.agent-status{display:flex;align-items:center;gap:6px;font-size:.48rem;color:var(--muted)}
+.agent-dot{width:5px;height:5px;border-radius:50%;background:var(--muted)}
+.agent-dot.watching{background:var(--bull);animation:pulse 2s infinite}
+.agent-dot.thinking{background:var(--gold);animation:blink 0.8s infinite}
 .log{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:5px 9px;font-size:.5rem;color:var(--muted);line-height:1.9;max-height:46px;overflow-y:auto;margin-top:8px}
 .ok{color:var(--bull)}.warn{color:var(--gold)}.err{color:var(--bear)}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
@@ -135,6 +164,9 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 <body>
 
 <!-- TICKER BANNER -->
+<!-- POPUP NOTIFICATIONS -->
+<div class="popup-wrap" id="popupWrap"></div>
+
 <div class="ticker-wrap">
   <div style="overflow:hidden;flex:1;position:relative">
     <div class="ticker-track" id="tickerTrack">
@@ -248,18 +280,14 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
       </div>
     </div>
 
-    <!-- ANALYZE BUTTON -->
-    <button class="analyze-btn" id="analyzeBtn" onclick="runAnalysis()" disabled>
-      ▶ ANALYZE MARKET
-    </button>
-
     <!-- CHAT -->
     <div class="panel">
-      <div class="phdr">AGENT
-        <span style="font-size:.42rem;color:var(--muted)">ask anything — knows current market</span>
+      <div class="phdr">
+        <div class="agent-status"><div class="agent-dot" id="agentDot"></div><span id="agentStatus">OFFLINE</span></div>
+        <button class="btn" id="reAnalyzeBtn" onclick="runAnalysis()" style="display:none;font-size:.44rem;padding:3px 8px">⟳ RE-ANALYZE</button>
       </div>
       <div class="chat-messages" id="chatMessages">
-        <div class="chat-empty">Press ANALYZE first, then ask anything.<br><br>Try: <span style="color:var(--accent)">"what trade should i do now?"</span></div>
+        <div class="chat-empty" id="chatEmpty">Agent starting up...<br>Analysis will begin automatically.</div>
       </div>
       <div class="chat-input-row">
         <textarea class="chat-input" id="chatInput" rows="2" placeholder="Ask the agent..." onkeydown="chatKeydown(event)"></textarea>
@@ -554,48 +582,96 @@ function buildMarketSummary(){
 1M: price=${M1.last} | ${M1.pda.pos} ${M1.pda.pct}% | FVG:${M1.fvgs.join('|')||'none'} | OB:${M1.obs.join('|')||'none'}`;
 }
 
-// ── ANALYZE — posts to chat as agent message ──────────────────────────────────
-async function runAnalysis(){
+// ── POPUP SYSTEM ──────────────────────────────────────────────────────────────
+function showPopup(text,type='analysis',duration=6000){
+  const wrap=document.getElementById('popupWrap');
+  const popup=document.createElement('div');
+  const isBear=text.toLowerCase().includes('short')||text.toLowerCase().includes('bearish');
+  const extraClass=(type==='trade'&&isBear)?' bear':'';
+  popup.className=`popup type-${type}${extraClass}`;
+  const tagLabels={analysis:'📊 ANALYSIS',trade:'🎯 TRADE SETUP',alert:'⚠ ALERT',update:'🔄 UPDATE'};
+  const tagClass=(type==='trade'&&isBear)?'trade bear':type;
+  const now=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  popup.innerHTML=`
+    <div class="popup-header">
+      <span class="popup-tag ${tagClass}">${tagLabels[type]||type.toUpperCase()}</span>
+      <span class="popup-close">✕</span>
+    </div>
+    <div class="popup-body">${text}</div>
+    <div class="popup-time">${now} EST</div>`;
+  wrap.appendChild(popup);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>popup.classList.add('show')));
+  const dismiss=()=>{
+    if(popup.classList.contains('hide'))return;
+    popup.classList.add('hide');
+    setTimeout(()=>popup.remove(),400);
+  };
+  popup.querySelector('.popup-close').addEventListener('click',e=>{e.stopPropagation();dismiss();});
+  popup.addEventListener('click',dismiss);
+  setTimeout(dismiss,duration);
+}
+
+function setAgentStatus(status){
+  const dot=document.getElementById('agentDot');
+  const label=document.getElementById('agentStatus');
+  if(!dot)return;
+  if(status==='watching'){dot.className='agent-dot watching';label.textContent='WATCHING';}
+  else if(status==='thinking'){dot.className='agent-dot thinking';label.textContent='ANALYZING...';}
+  else{dot.className='agent-dot';label.textContent='OFFLINE';}
+}
+
+function addAgentMsgToChat(text){
+  const el=document.getElementById('chatMessages');
+  const empty=el.querySelector('.chat-empty');if(empty)empty.remove();
+  const d=document.createElement('div');d.className='msg agent';d.textContent=text;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+
+// ── ANALYZE ───────────────────────────────────────────────────────────────────
+async function runAnalysis(isAuto=false){
   const antKey=document.getElementById('antKey').value.trim();
   if(!antKey||!S.candles.M15.length)return;
-
-  document.getElementById('analyzeBtn').disabled=true;
+  setAgentStatus('thinking');
   const ctx=buildMarketSummary();
-  if(!ctx){document.getElementById('analyzeBtn').disabled=false;return;}
-
+  if(!ctx){setAgentStatus('watching');return;}
+  const prevContext=S.marketContext;
   S.marketContext=ctx;
-  S.chatHistory=[];
-
-  // add system message to chat
-  addSystemMsg('Market analyzed — ask me anything about the setup');
-
-  const thinkingEl=addAgentMsg('thinking...',true);
-
+  const isFirstRun=!prevContext;
   const sys=buildAgentSystem();
-  const firstMsg=`I just analyzed the current ${getSymbol()} market. Give me a concise ICT scalp analysis — what is the current structure, where is price drawing to, and what should I be watching for right now. Be direct and conversational, no bullet points or headers. Max 4 sentences.`;
-
-  S.chatHistory.push({role:'user',content:firstMsg});
-
+  const prompt=isFirstRun
+    ?`I just started monitoring ${getSymbol()}. Give me an immediate ICT scalp read — structure, draw, what to watch. Max 2 sentences.`
+    :`${getSymbol()} just updated. Any change in the last 90 seconds? New sweep, BOS, or entry forming? If yes be specific and urgent. If nothing changed say "No change" only. Max 2 sentences.`;
+  S.chatHistory.push({role:'user',content:prompt});
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:400,system:sys,messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:300,system:sys,messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
-    const reply=data.content?.map(b=>b.text||'').join('');
-    S.chatHistory.push({role:'assistant',content:reply});
-    thinkingEl.className='msg agent';
-    thinkingEl.textContent=reply;
+    const rawReply=data.content?.map(b=>b.text||'').join('');
+    const displayReply=rawReply.replace(/TRADE::(LONG|SHORT|NONE)[^\n]*/g,'').trim();
+    S.chatHistory.push({role:'assistant',content:rawReply});
+    if(S.chatHistory.length>40)S.chatHistory=S.chatHistory.slice(-40);
+    const trade=parseTradeLine(rawReply);
+    const hasTrade=trade&&trade.dir!=='NONE';
+    if(hasTrade)updateTradeBox(trade);
+    addAgentMsgToChat(displayReply);
+    if(isFirstRun||hasTrade||!isAuto){
+      showPopup(displayReply,hasTrade?'trade':(isFirstRun?'analysis':'update'));
+    } else {
+      const noChange=displayReply.toLowerCase().startsWith('no change')||displayReply.toLowerCase().includes('nothing changed')||displayReply.toLowerCase().includes('unchanged')||displayReply.toLowerCase().includes('same setup')||displayReply.trim().toLowerCase()==='no change.';
+      if(!noChange)showPopup(displayReply,'update');
+    }
     document.getElementById('chatSend').disabled=false;
+    const rb=document.getElementById('reAnalyzeBtn');if(rb)rb.style.display='';
+    setAgentStatus('watching');
     log('Analysis complete','ok');
   }catch(e){
-    thinkingEl.className='msg agent';
-    thinkingEl.textContent='Error: '+e.message;
+    setAgentStatus('watching');
     log('Error: '+e.message,'err');
   }
-  document.getElementById('analyzeBtn').disabled=false;
 }
 
 function buildAgentSystem(){
@@ -726,19 +802,21 @@ async function sendChat(){
   document.getElementById('chatMessages').scrollTop=999999;
 }
 
-// ── SMART SYNC ────────────────────────────────────────────────────────────────
+// ── SMART SYNC + AUTO ANALYSIS ────────────────────────────────────────────────
 function startSync(){
   clearInterval(S.syncTick);
   let ticks=0;
   S.syncTick=setInterval(async()=>{
     if(!S.running)return;
     ticks++;
+    // 1M every 30s
     try{
       const sym=getSymbol();
       const c=await fetchTD(sym,'1min',60);
       S.candles.M1=c;S.series.M1.setData(c);
       S.charts.M1.timeScale().fitContent();setMeta('meta-M1',c);
     }catch(e){}
+    // 5M + 15M every 90s (every 3rd tick)
     if(ticks%3===0){
       try{
         const sym=getSymbol();
@@ -750,6 +828,10 @@ function startSync(){
         S.candles.M15=c15;S.series.M15.setData(c15);
         S.charts.M15.timeScale().fitContent();setMeta('meta-M15',c15);
       }catch(e){}
+    }
+    // auto-analysis every 3 ticks = 90 seconds
+    if(ticks%3===0){
+      runAnalysis(true);
     }
   },30000);
 }
@@ -770,10 +852,13 @@ async function startSession(){
   initCharts();
   log('Loading data…','ok');
   await fetchAll();
-  document.getElementById('analyzeBtn').disabled=false;
+  setAgentStatus('watching');
+  document.getElementById('chatSend').disabled=false;
   startSync();
   startTickerRefresh();
-  log('Ready — press ANALYZE','ok');
+  // auto-analyze immediately
+  log('Starting analysis…','ok');
+  await runAnalysis(false);
 }
 
 function stopSession(){
@@ -788,6 +873,7 @@ function stopSession(){
   document.getElementById('liveTag').style.display='none';
   document.getElementById('analyzeBtn').disabled=true;
   document.getElementById('chatSend').disabled=true;
+  setAgentStatus('offline');
   log('Session stopped','warn');
 }
 </script>
