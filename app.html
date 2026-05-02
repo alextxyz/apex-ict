@@ -71,7 +71,11 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .price-info{font-size:clamp(.46rem,.54vw,.6rem);color:var(--muted)}
 .price-info span{color:var(--text)}
 .live-tag{font-size:clamp(.34rem,.4vw,.46rem);color:var(--bull);margin-left:5px;animation:pulse 2s infinite}
-.chart-body{flex:1;min-height:0}
+.chart-body{flex:1;min-height:0;position:relative}
+.resize-handle{height:5px;background:transparent;cursor:ns-resize;position:relative;z-index:10;transition:background .15s;flex-shrink:0}
+.resize-handle:hover{background:rgba(0,212,255,.25)}
+.resize-handle::after{content:'';position:absolute;left:50%;transform:translateX(-50%);top:1px;width:40px;height:3px;border-radius:2px;background:var(--border);transition:background .15s}
+.resize-handle:hover::after{background:var(--accent)}
 
 /* RIGHT PANEL */
 .apanel{display:flex;flex-direction:column;gap:8px;position:sticky;top:8px;max-height:calc(100vh - 100px);overflow-y:auto}
@@ -158,22 +162,66 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
   </div>
 </div>
 
+<!-- SETTINGS MODAL -->
+<div id="settingsModal" style="display:none;position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:var(--s1);border:1px solid var(--border);border-radius:6px;width:min(480px,92vw);position:relative;overflow:hidden">
+    <!-- top accent line -->
+    <div style="height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent)"></div>
+    <!-- header -->
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-family:var(--display);font-weight:700;font-size:1rem;color:#fff">Settings</div>
+        <div style="font-size:.52rem;letter-spacing:.1em;color:var(--muted);margin-top:2px" id="settingsUser"></div>
+      </div>
+      <button onclick="closeSettings()" style="background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;border-radius:3px;padding:4px 10px;font-family:var(--mono);font-size:.6rem">✕ CLOSE</button>
+    </div>
+    <!-- body -->
+    <div style="padding:20px">
+      <!-- API section -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:.52rem;letter-spacing:.15em;color:var(--accent);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">API KEYS</div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:.5rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">ANTHROPIC KEY</div>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="antKeyModal" placeholder="sk-ant-api03-..." style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.72rem;padding:8px 12px;border-radius:3px;outline:none;transition:border-color .15s">
+            <button onclick="toggleKeyVisible()" class="btn" id="toggleKeyBtn">SHOW</button>
+          </div>
+          <div style="font-size:.48rem;color:var(--muted);margin-top:6px">Get your key at <span style="color:var(--accent)">console.anthropic.com</span> → API Keys</div>
+          <!-- save status -->
+          <div id="saveStatus" style="font-size:.52rem;margin-top:10px;display:none"></div>
+        </div>
+        <button onclick="saveApiKey()" style="background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(0,212,255,.05));border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;padding:9px 20px;border-radius:3px;cursor:pointer;font-weight:700;transition:all .2s" onmouseover="this.style.background='rgba(0,212,255,.2)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(0,212,255,.15),rgba(0,212,255,.05))'">
+          💾 SAVE KEY
+        </button>
+      </div>
+      <!-- account info -->
+      <div>
+        <div style="font-size:.52rem;letter-spacing:.15em;color:var(--muted);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">ACCOUNT</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:.62rem;color:var(--text)">Logged in as <span style="color:var(--accent);font-weight:700" id="settingsUser2"></span></div>
+          <button onclick="doLogout()" style="background:rgba(255,61,87,.08);border:1px solid rgba(255,61,87,.3);color:var(--bear);font-family:var(--mono);font-size:.55rem;padding:6px 12px;border-radius:3px;cursor:pointer">LOGOUT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
+<!-- Hidden API key input used by JS -->
+<input type="hidden" id="antKey">
+
 <header>
   <div class="hrow">
     <div class="logo">TX<em>Y</em>Z</div>
     <div class="hright">
       <div class="pill"><div class="dot off" id="liveDot"></div><span id="liveLabel">OFFLINE</span></div>
       <div class="pill" id="clock">--:--:-- EST</div>
+      <button class="btn" onclick="openSettings()" style="border-color:var(--muted)" id="settingsBtn">⚙ SETTINGS</button>
     </div>
   </div>
 </header>
 
 <div class="cfg">
-  <div class="cfg-g">
-    <label>ANTHROPIC KEY</label>
-    <input type="password" id="antKey" placeholder="sk-ant-...">
-  </div>
   <div class="cfg-g">
     <label>PAIR</label>
     <select id="pairSelect">
@@ -188,7 +236,6 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
     </select>
   </div>
   <div style="display:flex;gap:6px;align-self:flex-end">
-    <button class="btn go" id="startBtn" onclick="startSession()">▶ START</button>
     <button class="btn stop" id="stopBtn" onclick="stopSession()" style="display:none">■ STOP</button>
   </div>
 </div>
@@ -202,6 +249,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
           <span class="price-info" id="meta-M15"></span>
         </div>
         <div class="chart-body" id="chart-M15"></div>
+        <div class="resize-handle" id="rh-M15" title="Drag to resize"></div>
       </div>
       <div class="cpanel">
         <div class="chdr">
@@ -209,6 +257,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
           <span class="price-info" id="meta-M5"></span>
         </div>
         <div class="chart-body" id="chart-M5"></div>
+        <div class="resize-handle" id="rh-M5" title="Drag to resize"></div>
       </div>
       <div class="cpanel">
         <div class="chdr">
@@ -216,6 +265,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
           <span class="price-info" id="meta-M1"></span>
         </div>
         <div class="chart-body" id="chart-M1"></div>
+        <div class="resize-handle" id="rh-M1" title="Drag to resize"></div>
       </div>
     </div>
     <div class="log" id="log">System ready. Enter Anthropic key and press START.</div>
@@ -333,31 +383,42 @@ setInterval(()=>{
 
 // ── SAVE/LOAD KEYS ────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
+  // load saved key into hidden input and modal
   const saved=localStorage.getItem(`txyz_ant_${apexUser}`);
-  if(saved)document.getElementById('antKey').value=saved;
+  if(saved){
+    document.getElementById('antKey').value=saved;
+    document.getElementById('antKeyModal').value=saved;
+  }
 
-  // username in header
+  // set username in settings modal
+  document.getElementById('settingsUser').textContent=apexUser.toUpperCase();
+  document.getElementById('settingsUser2').textContent=apexUser.toUpperCase();
+
+  // username in header logo
   const logo=document.querySelector('.logo');
   if(logo){
     const s=document.createElement('span');
-    s.style.cssText='font-size:.48rem;color:var(--muted);margin-left:10px;letter-spacing:.1em;font-family:var(--mono);font-weight:400;vertical-align:middle';
+    s.style.cssText='font-size:.46rem;color:var(--muted);margin-left:10px;letter-spacing:.1em;font-family:var(--mono);font-weight:400;vertical-align:middle';
     s.textContent='HI, '+apexUser.toUpperCase();
     logo.appendChild(s);
   }
-  // logout
-  const hright=document.querySelector('.hright');
-  if(hright){
-    const btn=document.createElement('button');
-    btn.className='btn';btn.textContent='LOGOUT';
-    btn.onclick=()=>{sessionStorage.removeItem('apex_user');window.location.href='index.html';};
-    hright.appendChild(btn);
-  }
-  document.getElementById('antKey').addEventListener('change',()=>{
-    const v=document.getElementById('antKey').value.trim();
-    if(v)localStorage.setItem(`txyz_ant_${apexUser}`,v);
+
+  // auto-save key when pasted or changed in modal
+  const modalInput=document.getElementById('antKeyModal');
+  ['input','paste','change'].forEach(evt=>{
+    modalInput.addEventListener(evt,()=>{
+      setTimeout(()=>{
+        const v=modalInput.value.trim();
+        if(v&&v.startsWith('sk-')){
+          localStorage.setItem(`txyz_ant_${apexUser}`,v);
+          document.getElementById('antKey').value=v;
+          showSaveStatus('✓ Key saved automatically','#00e676');
+        }
+      },100);
+    });
   });
 
-  // start ticker immediately via REST (no key needed)
+  // start ticker
   loadTickerREST();
   setInterval(loadTickerREST,60000);
 
@@ -369,9 +430,57 @@ window.addEventListener('DOMContentLoaded',()=>{
       if(el&&S.charts[k])S.charts[k].applyOptions({width:el.clientWidth,height:getH(k)});
     });
   });
+
+  // auto-start everything after layout renders
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    startSession();
+  }));
 });
 
-// ── TICKER via Binance REST (no key, free) ────────────────────────────────────
+// ── SETTINGS MODAL ────────────────────────────────────────────────────────────
+function openSettings(){
+  const modal=document.getElementById('settingsModal');
+  modal.style.display='flex';
+  // sync current key to modal
+  const current=localStorage.getItem(`txyz_ant_${apexUser}`)||'';
+  document.getElementById('antKeyModal').value=current;
+}
+function closeSettings(){
+  document.getElementById('settingsModal').style.display='none';
+}
+function toggleKeyVisible(){
+  const inp=document.getElementById('antKeyModal');
+  const btn=document.getElementById('toggleKeyBtn');
+  if(inp.type==='password'){inp.type='text';btn.textContent='HIDE';}
+  else{inp.type='password';btn.textContent='SHOW';}
+}
+function saveApiKey(){
+  const v=document.getElementById('antKeyModal').value.trim();
+  if(!v){showSaveStatus('⚠ Please paste your key first','#f0b429');return;}
+  if(!v.startsWith('sk-')){showSaveStatus('⚠ Key should start with sk-','#f0b429');return;}
+  localStorage.setItem(`txyz_ant_${apexUser}`,v);
+  document.getElementById('antKey').value=v;
+  showSaveStatus('✓ Key saved — starting session...','#00e676');
+  setTimeout(()=>{
+    closeSettings();
+    if(!S.running)startSession();
+  },800);
+}
+function showSaveStatus(msg,color){
+  const el=document.getElementById('saveStatus');
+  el.textContent=msg;
+  el.style.color=color;
+  el.style.display='block';
+  setTimeout(()=>el.style.display='none',3000);
+}
+function doLogout(){
+  sessionStorage.removeItem('apex_user');
+  window.location.href='index.html';
+}
+// close modal on backdrop click
+document.getElementById('settingsModal').addEventListener('click',function(e){
+  if(e.target===this)closeSettings();
+});
 async function loadTickerREST(){
   try{
     const r=await fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=['+TICKER_PAIRS.map(p=>`"${p.toUpperCase()}"`).join(',')+']');
@@ -414,7 +523,11 @@ function startTickerScroll(){
 }
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
+// per-chart custom heights (user can drag to resize)
+const chartHeights={M15:null,M5:null,M1:null};
+
 function getH(k){
+  if(chartHeights[k])return chartHeights[k];
   const rows=k==='M15'?1.9:2.4;
   return Math.max(180,Math.floor((window.innerHeight-240)/rows));
 }
@@ -425,6 +538,11 @@ function initCharts(){
     grid:{vertLines:{color:'#1a2535'},horzLines:{color:'#1a2535'}},
     rightPriceScale:{borderColor:'#1a2535'},
     timeScale:{borderColor:'#1a2535',timeVisible:true,secondsVisible:false},
+    crosshair:{
+      mode:0, // Normal mode — NO magnet snapping, free crosshair
+      vertLine:{color:'rgba(0,212,255,.4)',width:1,style:1,labelBackgroundColor:'#0c1017'},
+      horzLine:{color:'rgba(0,212,255,.4)',width:1,style:1,labelBackgroundColor:'#0c1017'},
+    },
   };
   ['M15','M5','M1'].forEach(k=>{
     const el=document.getElementById('chart-'+k);
@@ -443,6 +561,36 @@ function initCharts(){
       el.style.height=nh+'px';
       chart.applyOptions({height:nh});
     }).observe(el);
+  });
+
+  // drag-to-resize handles
+  ['M15','M5','M1'].forEach(k=>{
+    const handle=document.getElementById('rh-'+k);
+    const el=document.getElementById('chart-'+k);
+    if(!handle||!el)return;
+    let startY=0,startH=0;
+    handle.addEventListener('mousedown',e=>{
+      e.preventDefault();
+      startY=e.clientY;
+      startH=el.offsetHeight;
+      document.body.style.cursor='ns-resize';
+      document.body.style.userSelect='none';
+      const onMove=e=>{
+        const delta=e.clientY-startY;
+        const newH=Math.max(120,startH+delta);
+        chartHeights[k]=newH;
+        el.style.height=newH+'px';
+        if(S.charts[k])S.charts[k].applyOptions({height:newH});
+      };
+      const onUp=()=>{
+        document.body.style.cursor='';
+        document.body.style.userSelect='';
+        window.removeEventListener('mousemove',onMove);
+        window.removeEventListener('mouseup',onUp);
+      };
+      window.addEventListener('mousemove',onMove);
+      window.addEventListener('mouseup',onUp);
+    });
   });
 }
 
@@ -835,11 +983,15 @@ function log(msg,type=''){
 // ── SESSION ───────────────────────────────────────────────────────────────────
 async function startSession(){
   const antKey=document.getElementById('antKey').value.trim();
-  if(!antKey){alert('Enter your Anthropic API key.');return;}
-  localStorage.setItem(`txyz_ant_${apexUser}`,antKey);
+  if(!antKey){
+    // no key saved — open settings so user can add it
+    openSettings();
+    showSaveStatus('⚠ Paste your Anthropic key here to get started','#f0b429');
+    log('No API key found — open Settings to add your key','warn');
+    return;
+  }
 
   S.running=true;
-  document.getElementById('startBtn').style.display='none';
   document.getElementById('stopBtn').style.display='';
   document.getElementById('liveDot').className='dot live';
   document.getElementById('liveLabel').textContent='LIVE';
@@ -850,27 +1002,22 @@ async function startSession(){
   initCharts();
   await new Promise(r=>setTimeout(r,80));
 
-  // load historical candles
-  log('Loading historical candles from Binance…');
+  log('Loading candles from Binance…');
   await loadAllCandles();
 
-  // fetch derivatives data
   log('Fetching funding rates & open interest…');
   await fetchDerivData();
-  S.derivTick=setInterval(fetchDerivData,60000); // refresh every minute
+  S.derivTick=setInterval(fetchDerivData,60000);
 
-  // connect live WebSockets
   log('Connecting live WebSocket streams…');
   connectAllWS();
 
   setAgentStatus('watching');
   document.getElementById('chatSend').disabled=false;
 
-  // auto-analyze immediately
   log('Starting analysis…','ok');
   await runAnalysis(false);
 
-  // auto-analysis every 2 minutes
   clearInterval(S.analysisTick);
   S.analysisTick=setInterval(()=>{
     if(S.running)runAnalysis(true);
@@ -882,7 +1029,6 @@ function stopSession(){
   clearInterval(S.analysisTick);
   clearInterval(S.derivTick);
   closeAllWS();
-  document.getElementById('startBtn').style.display='';
   document.getElementById('stopBtn').style.display='none';
   document.getElementById('liveDot').className='dot off';
   document.getElementById('liveLabel').textContent='OFFLINE';
