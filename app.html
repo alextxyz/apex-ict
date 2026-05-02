@@ -604,16 +604,43 @@ function setMeta(k,candles){
 }
 
 // ── BINANCE REST — fetch historical candles ───────────────────────────────────
-async function fetchCandles(pair,interval,limit=100){
-  const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=${limit}`);
-  const data=await r.json();
-  return data.map(k=>({
-    time:Math.floor(k[0]/1000),
-    open:parseFloat(k[1]),
-    high:parseFloat(k[2]),
-    low:parseFloat(k[3]),
-    close:parseFloat(k[4]),
-  }));
+async function fetchCandles(pair,interval,totalLimit=1500){
+  const maxPerReq=1000;
+  let allCandles=[];
+  let endTime=null;
+
+  // calculate how many requests we need
+  const requests=Math.ceil(totalLimit/maxPerReq);
+
+  for(let i=0;i<requests;i++){
+    const limit=Math.min(maxPerReq,totalLimit-allCandles.length);
+    let url=`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=${limit}`;
+    if(endTime)url+=`&endTime=${endTime}`;
+    try{
+      const r=await fetch(url);
+      const data=await r.json();
+      if(!Array.isArray(data)||data.length===0)break;
+      const candles=data.map(k=>({
+        time:Math.floor(k[0]/1000),
+        open:parseFloat(k[1]),
+        high:parseFloat(k[2]),
+        low:parseFloat(k[3]),
+        close:parseFloat(k[4]),
+      }));
+      // prepend older candles
+      allCandles=[...candles,...allCandles];
+      endTime=data[0][0]-1; // go further back
+      if(data.length<limit)break; // no more data
+      await new Promise(r=>setTimeout(r,100)); // small delay between requests
+    }catch(e){break;}
+  }
+  // sort by time and deduplicate
+  allCandles.sort((a,b)=>a.time-b.time);
+  const seen=new Set();
+  return allCandles.filter(c=>{
+    if(seen.has(c.time))return false;
+    seen.add(c.time);return true;
+  });
 }
 
 async function loadAllCandles(){
@@ -621,7 +648,9 @@ async function loadAllCandles(){
   for(const k of ['M15','M5','M1']){
     try{
       log(`Loading ${TF_LABELS[k]}…`);
-      const c=await fetchCandles(pair,TF[k],k==='M15'?100:150);
+      // 15M = 3000 bars (~31 days), 5M = 2000 bars (~7 days), 1M = 1500 bars (~25 hours)
+      const limits={M15:3000,M5:2000,M1:1500};
+      const c=await fetchCandles(pair,TF[k],limits[k]);
       S.candles[k]=c;
       S.series[k].setData(c);
       S.charts[k].timeScale().fitContent();
@@ -653,7 +682,7 @@ function connectWS(k){
       arr[arr.length-1]=candle;
     } else if(candle.time>=(arr[arr.length-1]?.time||0)){
       arr.push(candle);
-      if(arr.length>300)arr.shift();
+      if(arr.length>3500)arr.shift();
     }
     S.series[k].update(candle);
     setMeta(k,arr);
