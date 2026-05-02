@@ -329,6 +329,23 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
         </div>
         <div class="rr-row"><span class="rr-lbl">RISK / REWARD</span><span class="rr-val" id="rrVal">—</span></div>
 
+        <!-- TRADE CONVICTION -->
+        <div id="tradeConvSection" style="display:none;border-top:1px solid var(--border);padding:10px 12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted)">TRADE HEALTH</div>
+            <div style="font-size:.46rem;color:var(--muted)" id="tradeConvTime"></div>
+          </div>
+          <!-- health bar -->
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
+            <div id="tradeConvBar" style="height:100%;width:0%;border-radius:3px;transition:width .6s ease,background .6s ease"></div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-family:var(--display);font-weight:700;font-size:1.1rem" id="tradeConvScore">—</div>
+            <div style="font-size:.58rem;font-family:var(--mono)" id="tradeConvDelta"></div>
+          </div>
+          <div style="font-size:.56rem;color:var(--muted);line-height:1.6" id="tradeConvReasons"></div>
+        </div>
+
         <!-- PARTIALS -->
         <div id="partialsSection" style="display:none;border-top:1px solid var(--border);padding:8px 10px">
           <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">PARTIALS TAKEN</div>
@@ -617,9 +634,13 @@ function checkWatchedLevels(price){
   if(!S.watchedLevels.length||!S.running)return;
   const now=Date.now();
   S.watchedLevels.forEach(lvl=>{
+    // only alert on truly actionable levels
+    if(!['BSL','SSL','SWEEP'].includes(lvl.type))return;
     const key=lvl.label+lvl.price;
-    if((now-(S.levelAlertCooldown[key]||0))<120000)return;
-    const tol=lvl.tolerance||lvl.price*0.0008;
+    // 5 minute cooldown per level
+    if((now-(S.levelAlertCooldown[key]||0))<300000)return;
+    // tighter tolerance — only 0.03% (was 0.1%)
+    const tol=lvl.price*0.0003;
     if(Math.abs(price-lvl.price)<=tol){
       S.levelAlertCooldown[key]=now;
       triggerLevelAlert(lvl,price);
@@ -657,23 +678,20 @@ async function triggerLevelAlert(lvl,price){
 
 function extractLevelsFromText(text){
   const levels=[];
+  // only watch BSL SSL and sweep — most actionable signals
   const patterns=[
     {re:/BSL[:\s@]+([0-9]+\.?[0-9]*)/gi,type:'BSL',label:'BSL'},
     {re:/SSL[:\s@]+([0-9]+\.?[0-9]*)/gi,type:'SSL',label:'SSL'},
     {re:/sweep[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'SWEEP',label:'Sweep Target'},
-    {re:/FVG[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'FVG',label:'FVG'},
-    {re:/OB[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'OB',label:'OB'},
-    {re:/target[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'TP',label:'Target'},
-    {re:/watching[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'WATCH',label:'Watch Level'},
   ];
   patterns.forEach(({re,type,label})=>{
     let m;while((m=re.exec(text))!==null){
       const p=parseFloat(m[1]);
-      if(p>0)levels.push({price:p,type,label:`${label} ${p}`,tolerance:p*0.001});
+      if(p>0)levels.push({price:p,type,label:`${label} ${p}`,tolerance:p*0.0003});
     }
   });
   const seen=new Set();
-  return levels.filter(l=>{const k=l.price.toFixed(0);if(seen.has(k))return false;seen.add(k);return true;}).slice(0,12);
+  return levels.filter(l=>{const k=l.price.toFixed(0);if(seen.has(k))return false;seen.add(k);return true;}).slice(0,6);
 }
 
 async function loadTickerREST(){
@@ -991,6 +1009,58 @@ function calcConviction(m15,m5,m1){
   return{score,max:7,label:score>=6?'🔥 HIGH':score>=4?'⚡ MEDIUM':'⚠ LOW',reasons};
 }
 
+// trade-specific conviction — evaluates whether current price action supports the open trade
+function calcTradeConviction(trade,m15,m5,m1){
+  if(!trade)return null;
+  const isBull=trade.dir==='LONG';
+  const entry=parseFloat(trade.entry);
+  const sl=parseFloat(trade.sl);
+  const tp=parseFloat(trade.tp);
+  const price=S.lastPrice||parseFloat(m1.last);
+  let score=0,reasons=[];
+
+  // 1. Price moving in trade direction
+  if(isBull&&price>entry){score+=2;reasons.push('Price above entry ✓');}
+  else if(!isBull&&price<entry){score+=2;reasons.push('Price below entry ✓');}
+  else{reasons.push('Price against entry ✗');}
+
+  // 2. PDA still aligned with trade direction
+  if((isBull&&m15.pd.pos==='DISCOUNT')||((!isBull)&&m15.pd.pos==='PREMIUM')){
+    score++;reasons.push('PDA still aligned ✓');
+  } else {
+    reasons.push('PDA shifted ✗');
+  }
+
+  // 3. Price not near SL
+  if(sl&&price){
+    const distToSL=Math.abs(price-sl)/Math.abs(entry-sl);
+    if(distToSL>0.5){score++;reasons.push('Away from SL ✓');}
+    else if(distToSL<0.2){reasons.push('Close to SL ⚠');}
+  }
+
+  // 4. Progress toward TP
+  if(tp&&entry&&price){
+    const progress=isBull
+      ?(price-entry)/(tp-entry)
+      :(entry-price)/(entry-tp);
+    if(progress>0.5){score++;reasons.push(`${Math.round(progress*100)}% to TP ✓`);}
+    else if(progress>0.25){score++;reasons.push(`${Math.round(progress*100)}% to TP`);}
+    else{reasons.push('Early in trade');}
+  }
+
+  // 5. Funding rate still supports
+  if(S.derivData){
+    const fr=parseFloat(S.derivData.fundingRate);
+    if((isBull&&fr<0.02)||((!isBull)&&fr>-0.02)){score++;reasons.push('Funding ok ✓');}
+    else{reasons.push('Funding pressure ✗');}
+  }
+
+  const max=6;
+  const label=score>=5?'✅ STRONG':score>=3?'🟡 HOLD':score<=1?'❌ EXIT':'⚠ WEAKENING';
+  const color=score>=5?'#00e676':score>=3?'#f0b429':'#ff3d57';
+  return{score,max,label,color,reasons};
+}
+
 function buildMarketSummary(){
   const m15=buildCtx('M15'),m5=buildCtx('M5'),m1=buildCtx('M1');
   if(!m15||!m5||!m1)return null;
@@ -1050,7 +1120,7 @@ Use exact prices from the market data. Never explain this tag.
 
 BREAKEVEN: If price has moved enough in the trade direction and you recommend moving SL to entry, say "move to breakeven" or "set breakeven" in your message. The system will automatically update the trade box.
 
-Speak conversationally and directly. Max 3 sentences unless asked for more detail. No bullet points. Be decisive — the trader needs a clear answer, not hedging.`;
+Be VERY concise — 1-2 sentences MAX unless trader asks for more. No bullet points. Direct and decisive. Single clear action only.`;
 }
 
 // ── POPUP ─────────────────────────────────────────────────────────────────────
@@ -1118,7 +1188,7 @@ async function runAnalysis(isAuto=false){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:350,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:120,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -1133,7 +1203,10 @@ async function runAnalysis(isAuto=false){
     if(isAuto&&noChange){/* silent */}
     else{
       addMsgToChat(display,'agent');
-      showPopup(display,hasTrade?'trade':(isFirst?'analysis':'update'));
+      // popup only on first run or when trade found
+      if(isFirst||hasTrade){
+        showPopup(display,hasTrade?'trade':'analysis');
+      }
     }
     // extract and watch key levels from the analysis
     const newLevels=extractLevelsFromText(raw);
@@ -1164,7 +1237,7 @@ async function sendChat(){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:400,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:150,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -1310,6 +1383,8 @@ function onTradeClose(reason,hitPrice,isWin){
   document.getElementById('tradeLabel').textContent='TRADE CLOSED';
   document.getElementById('tradeLabel').style.color='var(--muted)';
   resetTradeExtras();
+  lastTradeConvScore=null;
+  document.getElementById('tradeConvSection').style.display='none';
   document.getElementById('tradeEntry').textContent='—';
   document.getElementById('tradeSL').textContent='—';
   document.getElementById('tradeTP').textContent='—';
@@ -1449,6 +1524,48 @@ function updateTradeBox(t){
 }
 
 // ── CONVICTION MONITOR — updates every 30s, alerts on change ─────────────────
+let lastTradeConvScore=null;
+
+function updateTradeConviction(m15,m5,m1){
+  if(!activeTrade)return;
+  const tc=calcTradeConviction(activeTrade,m15,m5,m1);
+  if(!tc)return;
+
+  const section=document.getElementById('tradeConvSection');
+  section.style.display='';
+
+  // bar
+  const bar=document.getElementById('tradeConvBar');
+  bar.style.width=((tc.score/tc.max)*100)+'%';
+  bar.style.background=tc.color;
+
+  // score + label
+  const scoreEl=document.getElementById('tradeConvScore');
+  scoreEl.textContent=tc.score+'/'+tc.max+' '+tc.label;
+  scoreEl.style.color=tc.color;
+
+  // delta
+  const deltaEl=document.getElementById('tradeConvDelta');
+  if(lastTradeConvScore!==null&&lastTradeConvScore!==tc.score){
+    const d=tc.score-lastTradeConvScore;
+    deltaEl.textContent=(d>0?'▲ +':'▼ ')+d;
+    deltaEl.style.color=d>0?'#00e676':'#ff3d57';
+  } else {
+    deltaEl.textContent='';
+  }
+  lastTradeConvScore=tc.score;
+
+  // reasons
+  document.getElementById('tradeConvReasons').textContent=tc.reasons.join(' · ');
+  document.getElementById('tradeConvTime').textContent=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+
+  // auto-alert if trade looks bad
+  if(tc.score<=1&&lastTradeConvScore!==null&&lastTradeConvScore>1){
+    showPopup('❌ Trade health critical — consider exiting','alert',8000);
+    addTradeStatus('⚠ Trade health dropped to '+tc.score+'/'+tc.max,'bear');
+  }
+}
+
 async function updateConviction(){
   if(!S.running||!S.candles.M15.length)return;
   const m15=buildCtx('M15'),m5=buildCtx('M5'),m1=buildCtx('M1');
@@ -1459,7 +1576,12 @@ async function updateConviction(){
   const colorKey=cv.label.includes('HIGH')?'HIGH':cv.label.includes('MEDIUM')?'MEDIUM':'LOW';
   const color=colors[colorKey];
 
-  // update UI
+  // update trade conviction if trade is active
+  if(activeTrade){
+    updateTradeConviction(m15,m5,m1);
+  } else {
+    document.getElementById('tradeConvSection').style.display='none';
+  }
   document.getElementById('convScore').textContent=cv.score+'/'+cv.max+' '+cv.label;
   document.getElementById('convScore').style.color=color;
   document.getElementById('convReasons').textContent=cv.reasons.join(' · ')||'No factors yet';
@@ -1522,10 +1644,11 @@ async function updateConviction(){
 
     addMsgToChat(display,'agent');
 
-    // popup with conviction change info
-    const popupType=delta<=-2?'alert':'update';
-    const icon=delta>0?'📈':'📉';
-    showPopup(`${icon} Conviction ${direction}: ${prev}→${cv.score}/7\n${display}`,popupType,9000);
+    // popup only for significant changes or when trade is active
+    if(delta<=-2||(activeTrade&&Math.abs(delta)>=1)){
+      const icon=delta>0?'📈':'📉';
+      showPopup(`${icon} Conviction ${direction}: ${prev}→${cv.score}/7 — ${display}`,delta<=-2?'alert':'update',7000);
+    }
     log(`Conviction ${direction}: ${prev}→${cv.score}/7`,'warn');
   }catch(e){log('Conviction update error: '+e.message,'err');}
   setAgentStatus('watching');
