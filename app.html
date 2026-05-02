@@ -516,7 +516,12 @@ window.addEventListener('DOMContentLoaded',()=>{
   });
 
   // auto-start after full page render — use setTimeout to ensure layout is complete
-  setTimeout(()=>startSession(),300);
+  setTimeout(()=>{
+    log('Auto-starting session…');
+    const k=document.getElementById('antKey').value.trim();
+    log('Key found: '+(k?'YES ('+k.substring(0,8)+'…)':'NO'));
+    startSession();
+  },300);
 });
 
 // ── SETTINGS MODAL ────────────────────────────────────────────────────────────
