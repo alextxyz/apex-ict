@@ -428,38 +428,38 @@ function startTickerScroll(){
 }
 
 async function loadTicker(){
-  // try saved key first, then input field
   const key=(localStorage.getItem(`apex_td_${apexUser}`)||document.getElementById('tdKey').value||'').trim();
-  if(!key){
-    // no key yet — show placeholder rolling text
-    const track=document.getElementById('tickerTrack');
-    if(track.innerHTML.includes('LOADING'))return;
-    return;
-  }
-  const track=document.getElementById('tickerTrack');
+  if(!key)return;
   try{
+    // ONE batch call for all symbols instead of 20 individual calls
+    const syms=TICKER_SYMBOLS.join(',');
+    const r=await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(syms)}&apikey=${key}`);
+    const d=await r.json();
+    // also get previous close for % change in one call
+    const r2=await fetch(`https://api.twelvedata.com/eod?symbol=${encodeURIComponent(syms)}&apikey=${key}`);
+    const d2=await r2.json();
+
     const prices=[];
-    for(const sym of TICKER_SYMBOLS){
-      try{
-        const r=await fetch(`https://api.twelvedata.com/quote?symbol=${encodeURIComponent(sym)}&apikey=${key}`);
-        const d=await r.json();
-        if(d.close&&d.previous_close){
-          const price=parseFloat(d.close);
-          const prev=parseFloat(d.previous_close);
-          const chg=((price-prev)/prev)*100;
-          prices.push({sym:sym.replace('/USD',''),price,chg});
-        }
-        await new Promise(r=>setTimeout(r,200));
-      }catch(e){}
-    }
+    TICKER_SYMBOLS.forEach(sym=>{
+      const shortSym=sym.replace('/USD','');
+      const priceData=d[sym]||d[shortSym];
+      const eodData=d2[sym]||d2[shortSym];
+      if(priceData?.price){
+        const price=parseFloat(priceData.price);
+        const prev=eodData?.close?parseFloat(eodData.close):price;
+        const chg=((price-prev)/prev)*100;
+        prices.push({sym:shortSym,price,chg:isNaN(chg)?0:chg});
+      }
+    });
+
     if(!prices.length)return;
     tickerPrices=prices;
-    // duplicate 4x for seamless infinite scroll
     const html=renderTickerHTML(prices);
+    const track=document.getElementById('tickerTrack');
     track.innerHTML=html+html+html+html;
     tickerPos=0;
-    startTickerScroll();
-  }catch(e){}
+    if(!tickerRAF)startTickerScroll();
+  }catch(e){log('Ticker error: '+e.message,'warn');}
 }
 
 function startTickerRefresh(){
@@ -470,6 +470,13 @@ function startTickerRefresh(){
 // ── CHARTS ───────────────────────────────────────────────────────────────────
 function getH(rows){return Math.max(200,Math.floor((window.innerHeight-260)/rows));}
 
+function getChartWidth(){
+  // estimate chart column width = total width minus right panel minus gaps
+  const panelW=Math.min(440,window.innerWidth*0.22);
+  const padding=Math.max(20,window.innerWidth*0.03);
+  return Math.floor((window.innerWidth-panelW-padding*2-12)/2);
+}
+
 function initCharts(){
   const theme={
     layout:{background:{type:'solid',color:'#0c1017'},textColor:'#4a6a84'},
@@ -478,23 +485,37 @@ function initCharts(){
     timeScale:{borderColor:'#1a2535',timeVisible:true,secondsVisible:false},
   };
   const defs=[
-    {k:'M15',id:'chart-M15',hFn:()=>getH(2)},
-    {k:'M5', id:'chart-M5', hFn:()=>getH(2.5)},
-    {k:'M1', id:'chart-M1', hFn:()=>getH(2.5)},
+    {k:'M15',id:'chart-M15',rows:2,   wide:true},
+    {k:'M5', id:'chart-M5', rows:2.5, wide:false},
+    {k:'M1', id:'chart-M1', rows:2.5, wide:false},
   ];
-  defs.forEach(({k,id,hFn})=>{
+  defs.forEach(({k,id,rows,wide})=>{
     const el=document.getElementById(id);
     el.innerHTML='';
-    const h=hFn();
+    const h=getH(rows);
+    const w=wide?(getChartWidth()*2+12):getChartWidth();
     el.style.height=h+'px';
-    const chart=LightweightCharts.createChart(el,{...theme,width:el.clientWidth,height:h});
+    el.style.width='100%';
+    const chart=LightweightCharts.createChart(el,{
+      ...theme,
+      width:Math.max(300,el.offsetWidth||w),
+      height:h,
+      autoSize:true,
+    });
     const series=chart.addCandlestickSeries({
       upColor:'#00e676',downColor:'#ff3d57',
       borderUpColor:'#00e676',borderDownColor:'#ff3d57',
       wickUpColor:'#00e676',wickDownColor:'#ff3d57',
     });
     S.charts[k]=chart;S.series[k]=series;
-    new ResizeObserver(()=>{const nh=hFn();el.style.height=nh+'px';chart.resize(el.clientWidth,nh);}).observe(el);
+    // ResizeObserver as backup
+    new ResizeObserver(entries=>{
+      for(const entry of entries){
+        const nh=getH(rows);
+        el.style.height=nh+'px';
+        chart.applyOptions({height:nh});
+      }
+    }).observe(el);
   });
 }
 
@@ -856,11 +877,11 @@ function startSync(){
         S.charts.M15.timeScale().fitContent();setMeta('meta-M15',c15);
       }catch(e){}
     }
-    // auto-analysis every 3 ticks = 90 seconds
-    if(ticks%3===0){
+    // auto-analysis every 5 ticks = 5 minutes
+    if(ticks%5===0){
       runAnalysis(true);
     }
-  },30000);
+  },60000); // 60s — saves API credits (free tier = 8 req/min)
 }
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
