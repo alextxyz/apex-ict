@@ -380,6 +380,18 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
   </div>
 
   <div class="apanel">
+    <!-- HTF BIAS -->
+    <div class="panel" id="htfPanel" style="display:none">
+      <div class="phdr">HTF BIAS<span id="htfTime" style="font-size:.44rem"></span></div>
+      <div style="padding:8px 12px">
+        <div id="htfRows" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px"></div>
+        <div style="border-top:1px solid var(--border);padding-top:6px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:.46rem;letter-spacing:.1em;color:var(--muted)">CONFLUENCE</span>
+          <span id="htfConfluence" style="font-family:var(--display);font-weight:700;font-size:.85rem">—</span>
+        </div>
+      </div>
+    </div>
+
     <!-- CONVICTION SCORE -->
     <div class="panel" id="convPanel" style="display:none">
       <div class="phdr">CONVICTION SCORE<span id="convTime" style="font-size:.44rem"></span></div>
@@ -1127,22 +1139,26 @@ setInterval(updateDailyPnL,30000);
 
 
 let htfLevels={dailyHi:null,dailyLo:null,weeklyHi:null,weeklyLo:null,prevDayHi:null,prevDayLo:null};
+let htfStructure={daily:null,h4:null,h1:null}; // full ICT structure on each TF
 
 async function fetchHTFLevels(){
   const pair=document.getElementById('pairSelect').value;
   try{
-    // daily candles — last 7 days
-    const dRes=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1d&limit=7`);
+    // ── DAILY (1d) — last 30 candles for structure ──
+    const dRes=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1d&limit=30`);
     const dData=await dRes.json();
     if(Array.isArray(dData)&&dData.length>=2){
+      const dCandles=dData.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
       const today=dData[dData.length-1];
       const prevDay=dData[dData.length-2];
       htfLevels.dailyHi=parseFloat(today[2]).toFixed(2);
       htfLevels.dailyLo=parseFloat(today[3]).toFixed(2);
       htfLevels.prevDayHi=parseFloat(prevDay[2]).toFixed(2);
       htfLevels.prevDayLo=parseFloat(prevDay[3]).toFixed(2);
+      // analyze structure
+      htfStructure.daily=analyzeHTF(dCandles);
     }
-    // weekly — last 4 weeks
+    // ── WEEKLY ──
     const wRes=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1w&limit=4`);
     const wData=await wRes.json();
     if(Array.isArray(wData)&&wData.length){
@@ -1150,7 +1166,105 @@ async function fetchHTFLevels(){
       htfLevels.weeklyHi=parseFloat(week[2]).toFixed(2);
       htfLevels.weeklyLo=parseFloat(week[3]).toFixed(2);
     }
+    // ── 4H — last 60 candles (10 days) ──
+    await new Promise(r=>setTimeout(r,150));
+    const h4Res=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=4h&limit=60`);
+    const h4Data=await h4Res.json();
+    if(Array.isArray(h4Data)&&h4Data.length){
+      const h4Candles=h4Data.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
+      htfStructure.h4=analyzeHTF(h4Candles);
+    }
+    // ── 1H — last 100 candles (~4 days) ──
+    await new Promise(r=>setTimeout(r,150));
+    const h1Res=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1h&limit=100`);
+    const h1Data=await h1Res.json();
+    if(Array.isArray(h1Data)&&h1Data.length){
+      const h1Candles=h1Data.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
+      htfStructure.h1=analyzeHTF(h1Candles);
+    }
+    updateHTFBiasPanel();
   }catch(e){}
+}
+
+function updateHTFBiasPanel(){
+  const panel=document.getElementById('htfPanel');
+  if(!panel)return;
+  const d=htfStructure.daily,h4=htfStructure.h4,h1=htfStructure.h1;
+  if(!d&&!h4&&!h1){panel.style.display='none';return;}
+  panel.style.display='';
+
+  const rows=[];
+  const tfData=[
+    {name:'DAILY',data:d},
+    {name:'4H',data:h4},
+    {name:'1H',data:h1},
+  ];
+  let bullCount=0,bearCount=0;
+  tfData.forEach(({name,data})=>{
+    if(!data){
+      rows.push(`<div style="display:flex;justify-content:space-between;font-size:.55rem"><span style="color:var(--muted);font-family:var(--mono)">${name}</span><span style="color:var(--muted)">loading...</span></div>`);
+      return;
+    }
+    const isBull=data.bias==='DISCOUNT'||(data.bias==='EQUILIBRIUM'&&data.trend==='BULLISH');
+    const isBear=data.bias==='PREMIUM'||(data.bias==='EQUILIBRIUM'&&data.trend==='BEARISH');
+    if(isBull)bullCount++;else if(isBear)bearCount++;
+    const dot=isBull?'🟢':isBear?'🔴':'🟡';
+    const color=isBull?'var(--bull)':isBear?'var(--bear)':'var(--gold)';
+    const arrow=data.trend==='BULLISH'?'↑':'↓';
+    rows.push(`<div style="display:flex;justify-content:space-between;align-items:center;font-size:.55rem">
+      <span style="font-family:var(--mono);color:var(--text);font-weight:700;letter-spacing:.05em">${name}</span>
+      <span style="color:${color};font-family:var(--mono)">${dot} ${data.bias} <span style="color:var(--muted);font-size:.5rem">${data.pdaPct}%</span> ${arrow}</span>
+    </div>`);
+  });
+  document.getElementById('htfRows').innerHTML=rows.join('');
+
+  // confluence
+  const conf=document.getElementById('htfConfluence');
+  if(bullCount>=2&&bearCount===0){
+    conf.textContent='🟢 STRONG LONG';
+    conf.style.color='var(--bull)';
+  } else if(bearCount>=2&&bullCount===0){
+    conf.textContent='🔴 STRONG SHORT';
+    conf.style.color='var(--bear)';
+  } else if(bullCount>bearCount){
+    conf.textContent='🟢 LEANING LONG';
+    conf.style.color='var(--bull)';
+  } else if(bearCount>bullCount){
+    conf.textContent='🔴 LEANING SHORT';
+    conf.style.color='var(--bear)';
+  } else {
+    conf.textContent='⚖️ MIXED';
+    conf.style.color='var(--muted)';
+  }
+  document.getElementById('htfTime').textContent=' · '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
+}
+
+setInterval(updateHTFBiasPanel,30000);
+
+
+function analyzeHTF(candles){
+  if(!candles||candles.length<10)return null;
+  const sw=swings(candles,3);
+  const eq=eqLevels(candles,0.001);
+  const fg=fvgs(candles).slice(-3);
+  const ob=obs(candles).slice(-2);
+  const pd=pda(candles);
+  const last=candles[candles.length-1];
+  // last 5 candles trend direction
+  const recent=candles.slice(-5);
+  const trendDir=recent[recent.length-1].close>recent[0].close?'BULLISH':'BEARISH';
+  return{
+    last:last.close,
+    bias:pd.pos,        // DISCOUNT / PREMIUM / EQUILIBRIUM
+    pdaPct:pd.pct,
+    trend:trendDir,
+    swHi:sw.hi.slice(-2),
+    swLo:sw.lo.slice(-2),
+    bsl:eq.bsl.slice(-2),
+    ssl:eq.ssl.slice(-2),
+    fvgs:fg,
+    obs:ob,
+  };
 }
 
 
@@ -1477,7 +1591,7 @@ async function triggerLevelAlert(lvl,price){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:200,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:80,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -1918,63 +2032,83 @@ function buildSystem(){
   const journal=getJournalSummary();
   const dailyStats=getDailyStats();
   const r=getRiskSettings();
+  const d=htfStructure.daily,h4=htfStructure.h4,h1=htfStructure.h1;
 
-  return`You are an ICT scalp analyst. Pure ICT 2022 framework — nothing else. Trader holds 5–20 min.
+  return`You are an ICT scalp analyst. Top-down framework: HTF dictates bias, LTF gives entry. Trader holds 5–20 min — fast scalps only.
 
-CURRENT MARKET DATA:
+CURRENT MARKET DATA (15M / 5M / 1M):
 ${S.marketContext||'No data yet.'}
 
-TIME: ${session.session} session${session.isWeekend?' (WEEKEND)':''}
+═══ TOP-DOWN HTF CONTEXT (use for bias, NOT entry) ═══
 
-${htfLevels.dailyHi?`HTF KEY LEVELS (the only context that matters for bias):
-Today High: ${htfLevels.dailyHi} | Today Low: ${htfLevels.dailyLo}
-Prev Day High: ${htfLevels.prevDayHi} | Prev Day Low: ${htfLevels.prevDayLo}`:''}
+${d?`DAILY: ${d.bias} ${d.pdaPct}% | trend ${d.trend} | last ${d.last}
+  BSL: ${d.bsl.join(',')||'none'} | SSL: ${d.ssl.join(',')||'none'}`:'DAILY: loading...'}
 
-${journal?`Trader history: ${journal.winRate}% WR (${journal.wins}W/${journal.losses}L last ${journal.total} trades)`:''}
+${h4?`4H: ${h4.bias} ${h4.pdaPct}% | trend ${h4.trend} | last ${h4.last}
+  BSL: ${h4.bsl.join(',')||'none'} | SSL: ${h4.ssl.join(',')||'none'}
+  FVGs: ${h4.fvgs.length?h4.fvgs.map(f=>f.type+' '+f.lo+'-'+f.hi).join(' | '):'none'}`:'4H: loading...'}
 
-TODAY: ${dailyStats.trades} trades | P&L: $${dailyStats.pnl.toFixed(0)}
+${h1?`1H: ${h1.bias} ${h1.pdaPct}% | trend ${h1.trend} | last ${h1.last}
+  BSL: ${h1.bsl.join(',')||'none'} | SSL: ${h1.ssl.join(',')||'none'}
+  FVGs: ${h1.fvgs.length?h1.fvgs.map(f=>f.type+' '+f.lo+'-'+f.hi).join(' | '):'none'}`:'1H: loading...'}
+
+${htfLevels.dailyHi?`KEY LEVELS:
+Today H/L: ${htfLevels.dailyHi}/${htfLevels.dailyLo} | Prev Day H/L: ${htfLevels.prevDayHi}/${htfLevels.prevDayLo}
+Weekly H/L: ${htfLevels.weeklyHi}/${htfLevels.weeklyLo}`:''}
+
+TIME: ${session.session} session${session.isWeekend?' (WEEKEND — low vol)':''}
+${journal?`History: ${journal.winRate}% WR (${journal.wins}W/${journal.losses}L)`:''}
+TODAY: ${dailyStats.trades} trades | $${dailyStats.pnl.toFixed(0)}
 ${dailyStats.maxLossHit?'⛔ MAX LOSS HIT — DO NOT TRADE':''}
 
-═══ ICT FRAMEWORK (KEEP IT SIMPLE) ═══
+═══ ICT FRAMEWORK ═══
 
-STEP 1 — HTF BIAS (15M):
-Where's price relative to recent range?
-- DISCOUNT (lower half) → bias LONG, target BSL above
-- PREMIUM (upper half) → bias SHORT, target SSL below
-That's it. No more analysis at this stage.
+TOP-DOWN BIAS (decide direction from HTF):
+- Daily DISCOUNT + 4H DISCOUNT → strong LONG bias
+- Daily PREMIUM + 4H PREMIUM → strong SHORT bias
+- Conflict (Daily/4H disagree) → 1H breaks the tie
+- All three aligned → highest probability scalps
 
-STEP 2 — LTF ENTRY SIGNAL (5M / 1M):
-Wait for ONE of these on lower timeframe in direction of bias:
-A) LIQUIDITY SWEEP — price takes out a recent swing low (long bias) or swing high (short bias) AND closes back inside
-B) BREAK OF STRUCTURE — 5M closes through a recent swing in direction of bias
-C) FVG TAP — price retraces into a fair value gap and rejects in bias direction
-D) ORDER BLOCK TAP — price returns to last bullish/bearish OB and rejects
+LTF EXECUTION (15M / 5M / 1M for entry):
+1. 15M = bias confirmation. Must align with HTF direction.
+2. Wait for ONE entry signal on 5M/1M in bias direction:
+   A) Liquidity SWEEP — takes a recent swing low/high then closes back inside
+   B) BOS — 5M breaks structure in bias direction
+   C) FVG TAP — price retraces into FVG and rejects
+   D) OB TAP — price returns to last bullish/bearish OB and rejects
 
-Any ONE of these = valid entry. Don't wait for all four.
-
-STEP 3 — EXECUTION:
-- Entry: at the LTF signal (sweep close, BOS retest, FVG/OB tap)
-- SL: just beyond the swept liquidity or invalidation point
-- TP: nearest opposing liquidity (BSL for longs, SSL for shorts) on 15M
+3. Entry: at the LTF signal
+   SL: just past invalidation
+   TP: nearest opposing 15M liquidity (small targets — this is scalp)
 
 ═══ RULES ═══
-1. HTF bias decides direction. LTF signal decides entry. Nothing more.
-2. If price in DISCOUNT and you see ANY of the 4 entry signals → LONG.
-3. If price in PREMIUM and you see ANY of the 4 entry signals → SHORT.
-4. Don't trade against HTF bias. Ever.
-5. If max daily loss hit, don't call trades.
+1. NEVER trade against Daily + 4H aligned bias.
+2. If HTF is mixed, smaller size or skip.
+3. Scalp targets: nearest 15M BSL/SSL. NOT daily/weekly highs (those are for swing).
+4. Hold 5-20 min max.
+5. Daily max loss hit → no new trades.
 
-═══ TRADE TAG (always end with this) ═══
+═══ MESSAGE LENGTH (CRITICAL) ═══
+ULTRA SHORT. ONE SENTENCE. Max 15 words.
+Examples:
+- "Daily discount + 5M sweep. LONG 84500, SL 84420, TP 84720."
+- "Premium + BOS bear. SHORT 84800."
+- "HTF mixed, no setup."
+- "Move to breakeven."
+- "No change."
+NEVER explain. NEVER justify. NEVER use multiple sentences.
+
+═══ TRADE TAG ═══
 TRADE::LONG|ENTRY|SL|TP
 TRADE::SHORT|ENTRY|SL|TP
 TRADE::NONE
 
 ═══ MANAGEMENT ═══
-"move to breakeven" — when 50% to TP
+"move to breakeven" — at 50% to TP
 "take partial" — at 1R
-"close trade" — if HTF bias flips or structure invalidated
+"close trade" — if HTF bias flips OR LTF structure breaks
 
-Be 1-2 sentences MAX. No fluff. Just: bias + signal + trade.`;
+Be 1-2 sentences MAX. Format: "[HTF bias] + [LTF signal] = [trade]". Direct, fast, decisive.`;
 }
 
 // ── POPUP ─────────────────────────────────────────────────────────────────────
@@ -2008,7 +2142,20 @@ function addMsgToChat(text,role='agent'){
   const el=document.getElementById('chatMessages');
   const empty=el.querySelector('.chat-empty');if(empty)empty.remove();
   const d=document.createElement('div');
-  d.className=`msg ${role}`;d.textContent=text;
+  d.className=`msg ${role}`;
+  // skip timestamp for "thinking..." placeholder
+  if(role==='agent thinking'){
+    d.textContent=text;
+  } else {
+    const time=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
+    const timeEl=document.createElement('span');
+    timeEl.style.cssText='font-size:.5rem;color:var(--muted);margin-right:6px;font-family:var(--mono);opacity:.6';
+    timeEl.textContent=time;
+    const txtEl=document.createElement('span');
+    txtEl.textContent=text;
+    d.appendChild(timeEl);
+    d.appendChild(txtEl);
+  }
   el.appendChild(d);el.scrollTop=el.scrollHeight;return d;
 }
 
@@ -2042,7 +2189,7 @@ async function runAnalysis(isAuto=false){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:120,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:80,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -2091,7 +2238,7 @@ async function sendChat(){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:150,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:90,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -2518,7 +2665,7 @@ async function updateConviction(){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:180,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:80,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
