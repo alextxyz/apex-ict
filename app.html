@@ -445,6 +445,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
         <div class="trade-box-hdr">
           <span class="dir-badge" id="dirBadge"></span>
           <span id="tradeLabel">NO SETUP YET</span>
+          <button id="manualCloseBtn" onclick="manualCloseTrade()" style="display:none;margin-left:auto;background:rgba(255,61,87,.12);border:1px solid rgba(255,61,87,.4);color:var(--bear);font-family:var(--mono);font-size:.5rem;letter-spacing:.1em;padding:3px 8px;border-radius:2px;cursor:pointer;font-weight:700">✕ CLOSE</button>
         </div>
         <div class="trade-grid">
           <div class="trade-cell"><div class="trade-cell-lbl">ENTRY</div><div class="trade-cell-val entry" id="tradeEntry">—</div></div>
@@ -823,7 +824,7 @@ async function scanOtherPairs(){
     if(pair===currentPair)continue; // skip current
     try{
       // fetch quick snapshot — just 15M for speed
-      const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=15m&limit=20`);
+      const r=await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair}&interval=15m&limit=20`);
       const data=await r.json();
       if(!Array.isArray(data))continue;
       const candles=data.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
@@ -941,7 +942,7 @@ async function runBacktest(){
   let endTime=null;
   try{
     for(let i=0;i<3;i++){
-      const url=`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=5m&limit=1000${endTime?'&endTime='+endTime:''}`;
+      const url=`https://fapi.binance.com/fapi/v1/klines?symbol=${pair}&interval=5m&limit=1000${endTime?'&endTime='+endTime:''}`;
       const r=await fetch(url);const d=await r.json();
       if(!Array.isArray(d)||!d.length)break;
       const c=d.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
@@ -1145,7 +1146,7 @@ async function fetchHTFLevels(){
   const pair=document.getElementById('pairSelect').value;
   try{
     // ── DAILY (1d) — last 30 candles for structure ──
-    const dRes=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1d&limit=30`);
+    const dRes=await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair}&interval=1d&limit=30`);
     const dData=await dRes.json();
     if(Array.isArray(dData)&&dData.length>=2){
       const dCandles=dData.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
@@ -1159,7 +1160,7 @@ async function fetchHTFLevels(){
       htfStructure.daily=analyzeHTF(dCandles);
     }
     // ── WEEKLY ──
-    const wRes=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1w&limit=4`);
+    const wRes=await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair}&interval=1w&limit=4`);
     const wData=await wRes.json();
     if(Array.isArray(wData)&&wData.length){
       const week=wData[wData.length-1];
@@ -1168,7 +1169,7 @@ async function fetchHTFLevels(){
     }
     // ── 4H — last 60 candles (10 days) ──
     await new Promise(r=>setTimeout(r,150));
-    const h4Res=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=4h&limit=60`);
+    const h4Res=await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair}&interval=4h&limit=60`);
     const h4Data=await h4Res.json();
     if(Array.isArray(h4Data)&&h4Data.length){
       const h4Candles=h4Data.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
@@ -1176,7 +1177,7 @@ async function fetchHTFLevels(){
     }
     // ── 1H — last 100 candles (~4 days) ──
     await new Promise(r=>setTimeout(r,150));
-    const h1Res=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1h&limit=100`);
+    const h1Res=await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair}&interval=1h&limit=100`);
     const h1Data=await h1Res.json();
     if(Array.isArray(h1Data)&&h1Data.length){
       const h1Candles=h1Data.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
@@ -1391,7 +1392,7 @@ let orderBookData={bidWalls:[],askWalls:[],imbalance:null,topBid:null,topAsk:nul
 async function fetchOrderBook(){
   const pair=document.getElementById('pairSelect').value;
   try{
-    const r=await fetch(`https://api.binance.com/api/v3/depth?symbol=${pair}&limit=100`);
+    const r=await fetch(`https://fapi.binance.com/fapi/v1/depth?symbol=${pair}&limit=100`);
     const data=await r.json();
     if(!data.bids||!data.asks)return;
 
@@ -1437,7 +1438,17 @@ function updateJournalPanel(){
   document.getElementById('jWinRate').style.color=j.winRate>=60?'var(--bull)':j.winRate>=40?'var(--gold)':'var(--bear)';
   document.getElementById('jTotal').textContent=j.total;
   document.getElementById('jWL').textContent=j.wins+'/'+j.losses;
-  document.getElementById('jBreakdown').innerHTML=`Long: <span style="color:var(--bull)">${j.longRate}%</span> · Short: <span style="color:var(--bear)">${j.shortRate}%</span>`;
+  // build richer breakdown
+  const totalRColor=parseFloat(j.totalR)>=0?'var(--bull)':'var(--bear)';
+  document.getElementById('jBreakdown').innerHTML=`
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>Long</span><span style="color:var(--bull)">${j.longRate}%</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>Short</span><span style="color:var(--bear)">${j.shortRate}%</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span>Avg R</span><span style="color:${totalRColor};font-weight:700">${j.avgR}R</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>Total R</span><span style="color:${totalRColor};font-weight:700">${j.totalR}R</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>Avg hold</span><span style="color:var(--text)">${j.avgHold}min</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span style="color:var(--muted)">Best setup</span><span style="color:var(--accent);font-size:.48rem">${j.bestSetup}</span></div>
+    <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Best session</span><span style="color:var(--accent);font-size:.48rem">${j.bestSession}</span></div>
+  `;
 }
 
 function exportJournal(){
@@ -1454,7 +1465,7 @@ function exportJournal(){
 
 async function fetchBTCContext(){
   try{
-    const r=await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&limit=12');
+    const r=await fetch('https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=5m&limit=12');
     const data=await r.json();
     if(!Array.isArray(data)||data.length<3)return;
     const prices=data.map(k=>parseFloat(k[4]));
@@ -1479,19 +1490,58 @@ function saveJournal(j){
 
 function logTradeToJournal(trade,outcome,exitPrice,pnlPct){
   const j=loadJournal();
+  // calculate hold time in minutes
+  const openedAt=trade.openedAt||Date.now();
+  const holdMinutes=Math.round((Date.now()-openedAt)/60000);
+
+  // calculate R-multiple
+  const entry=parseFloat(trade.entry);
+  const sl=parseFloat(trade.sl);
+  const exit=parseFloat(exitPrice);
+  const isLong=trade.dir==='LONG';
+  const risk=Math.abs(entry-sl);
+  const pnl=isLong?(exit-entry):(entry-exit);
+  const rMultiple=risk?+(pnl/risk).toFixed(2):0;
+
+  // setup type — extract from trade.setupReason if agent provided
+  const setupType=trade.setupType||'unknown';
+
   j.push({
     id:Date.now(),
+    timestamp:new Date().toISOString(),
     pair:document.getElementById('pairSelect').value,
+
+    // execution
     dir:trade.dir,
     entry:trade.entry,
     sl:trade.sl,
     tp:trade.tp,
     exitPrice,
-    outcome, // 'TP','SL','MANUAL','BREAKEVEN'
+    outcome,
     pnlPct,
+    rMultiple,
+    holdMinutes,
+    maxDrawdown:trade.maxDrawdown||null, // worst point during trade
+    maxProfit:trade.maxProfit||null,     // best point during trade
+
+    // ICT setup context
+    setupType, // sweep / BOS / FVG / OB
     convAtEntry:trade.convAtEntry||null,
-    timestamp:new Date().toISOString(),
+
+    // HTF bias snapshot
+    htfDaily:trade.htfDaily||null,       // DISCOUNT / PREMIUM / EQUILIBRIUM
+    htfH4:trade.htfH4||null,
+    htfH1:trade.htfH1||null,
+    htfConfluence:trade.htfConfluence||null, // STRONG_LONG / LEANING_LONG / MIXED / etc.
+
+    // market context
     sessionContext:trade.sessionContext||'',
+    fundingRate:trade.fundingRate||null,
+    lsRatio:trade.lsRatio||null,
+    btcTrend:trade.btcTrend||null,        // for non-BTC pairs
+
+    // trader note (manual entry from journal viewer later)
+    note:trade.note||'',
   });
   saveJournal(j);
 }
@@ -1504,15 +1554,60 @@ function getJournalSummary(){
   const losses=recent.filter(t=>t.outcome==='SL').length;
   const total=recent.length;
   const winRate=total?Math.round((wins/total)*100):0;
-  // group by direction
+
   const longs=recent.filter(t=>t.dir==='LONG');
   const shorts=recent.filter(t=>t.dir==='SHORT');
   const longWins=longs.filter(t=>t.outcome==='TP').length;
   const shortWins=shorts.filter(t=>t.outcome==='TP').length;
+
+  // R-multiple stats
+  const rMultiples=recent.map(t=>parseFloat(t.rMultiple)||0);
+  const totalR=rMultiples.reduce((a,b)=>a+b,0);
+  const avgR=total?(totalR/total).toFixed(2):0;
+
+  // avg hold time
+  const holdTimes=recent.map(t=>t.holdMinutes||0).filter(h=>h>0);
+  const avgHold=holdTimes.length?Math.round(holdTimes.reduce((a,b)=>a+b,0)/holdTimes.length):0;
+
+  // best setup type
+  const setupStats={};
+  recent.forEach(t=>{
+    const s=t.setupType||'unknown';
+    if(!setupStats[s])setupStats[s]={total:0,wins:0};
+    setupStats[s].total++;
+    if(t.outcome==='TP')setupStats[s].wins++;
+  });
+  let bestSetup='—',bestSetupRate=0;
+  Object.entries(setupStats).forEach(([s,v])=>{
+    if(v.total>=3){
+      const rate=v.wins/v.total*100;
+      if(rate>bestSetupRate){bestSetupRate=rate;bestSetup=s+' '+Math.round(rate)+'%';}
+    }
+  });
+
+  // best session
+  const sessionStats={};
+  recent.forEach(t=>{
+    const s=t.sessionContext||'?';
+    if(!sessionStats[s])sessionStats[s]={total:0,wins:0};
+    sessionStats[s].total++;
+    if(t.outcome==='TP')sessionStats[s].wins++;
+  });
+  let bestSession='—',bestSessionRate=0;
+  Object.entries(sessionStats).forEach(([s,v])=>{
+    if(v.total>=3){
+      const rate=v.wins/v.total*100;
+      if(rate>bestSessionRate){bestSessionRate=rate;bestSession=s+' '+Math.round(rate)+'%';}
+    }
+  });
+
   return{
     total,wins,losses,winRate,
     longRate:longs.length?Math.round((longWins/longs.length)*100):0,
     shortRate:shorts.length?Math.round((shortWins/shorts.length)*100):0,
+    avgR,totalR:totalR.toFixed(2),
+    avgHold,
+    bestSetup,bestSession,
     last:recent[recent.length-1],
   };
 }
@@ -1521,7 +1616,7 @@ function getJournalSummary(){
 function connectPriceWS(){
   const pair=document.getElementById('pairSelect').value.toLowerCase();
   if(S.wsPrice)try{S.wsPrice.close();}catch(e){}
-  const ws=new WebSocket(`wss://stream.binance.com:9443/ws/${pair}@ticker`);
+  const ws=new WebSocket(`wss://fstream.binance.com/ws/${pair}@ticker`);
   ws.onmessage=(e)=>{
     const d=JSON.parse(e.data);
     const price=parseFloat(d.c);
@@ -1541,7 +1636,7 @@ function updateLivePriceDisplay(price,chg,prev){
   const chgEl=document.getElementById('livePriceChg');
   const symEl=document.getElementById('livePriceSym');
   if(!valEl)return;
-  symEl.textContent=sym+'/USDT';
+  symEl.textContent=sym+'/USDT PERP';
   const dec=price>1000?2:price>1?4:6;
   valEl.textContent=price.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
   const up=chg>=0;
@@ -1628,7 +1723,7 @@ function extractLevelsFromText(text){
 
 async function loadTickerREST(){
   try{
-    const r=await fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=['+TICKER_PAIRS.map(p=>`"${p.toUpperCase()}"`).join(',')+']');
+    const r=await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbols=['+TICKER_PAIRS.map(p=>`"${p.toUpperCase()}"`).join(',')+']');
     const data=await r.json();
     if(!Array.isArray(data))return;
     const items=data.map(d=>{
@@ -1773,7 +1868,7 @@ async function fetchCandles(pair,interval,totalLimit=1500){
 
   for(let i=0;i<requests;i++){
     const limit=Math.min(maxPerReq,totalLimit-allCandles.length);
-    let url=`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${interval}&limit=${limit}`;
+    let url=`https://fapi.binance.com/fapi/v1/klines?symbol=${pair}&interval=${interval}&limit=${limit}`;
     if(endTime)url+=`&endTime=${endTime}`;
     try{
       const r=await fetch(url);
@@ -1823,7 +1918,7 @@ async function loadAllCandles(){
 function connectWS(k){
   const pair=document.getElementById('pairSelect').value.toLowerCase();
   const interval=TF[k];
-  const ws=new WebSocket(`wss://stream.binance.com:9443/ws/${pair}@kline_${interval}`);
+  const ws=new WebSocket(`wss://fstream.binance.com/ws/${pair}@kline_${interval}`);
 
   ws.onmessage=(e)=>{
     const msg=JSON.parse(e.data);
@@ -2010,17 +2105,20 @@ function buildMarketSummary(){
   const pair=document.getElementById('pairSelect').value;
   const cv=calcConviction(m15,m5,m1);
   const d=S.derivData;
-  return`${pair} LIVE (${new Date().toLocaleTimeString()}):
+  const livePrice=S.lastPrice||m1.last;
+  return`${pair} PERPETUAL FUTURES — ${new Date().toLocaleTimeString()}
+
+⚡ CURRENT LIVE PRICE: ${livePrice}
+↑ This is the ONLY price the trader can enter at right now.
+↑ Any TRADE:: entry MUST be within 0.05% of this price (or be a pending limit at unreached level).
 
 ICT STRUCTURE:
 15M: price=${m15.last}|${m15.pd.pos} ${m15.pd.pct}%|SwHi:${m15.swHi.join(',')}|SwLo:${m15.swLo.join(',')}|BSL:${m15.bsl.join(',')||'none'}|SSL:${m15.ssl.join(',')||'none'}|FVG:${m15.fvgs.join('|')||'none'}|OB:${m15.obs.join('|')||'none'}
 5M: price=${m5.last}|${m5.pd.pos} ${m5.pd.pct}%|SwHi:${m5.swHi.join(',')}|SwLo:${m5.swLo.join(',')}|BSL:${m5.bsl.join(',')||'none'}|SSL:${m5.ssl.join(',')||'none'}|FVG:${m5.fvgs.join('|')||'none'}|OB:${m5.obs.join('|')||'none'}|BRK:${m5.brk.join('|')||'none'}
 1M: price=${m1.last}|${m1.pd.pos} ${m1.pd.pct}%|FVG:${m1.fvgs.join('|')||'none'}|OB:${m1.obs.join('|')||'none'}
 
-DERIVATIVES & SENTIMENT:
-${d?`Funding: ${d.fundingRate}% (${d.fundingAnnualized}% annualized) — ${d.fundingBias}
-Open Interest: ${d.openInterest} contracts
-Long/Short Ratio: ${d.lsRatio} — ${d.lsBias}`:'Derivatives data unavailable'}
+DERIVATIVES:
+${d?`Funding: ${d.fundingRate}% — ${d.fundingBias} | OI: ${d.openInterest} | L/S: ${d.lsRatio} ${d.lsBias}`:'Derivatives data unavailable'}
 
 CONVICTION: ${cv.score}/${cv.max} ${cv.label}
 ${cv.reasons.join(' | ')||'No factors confirmed yet'}`;
@@ -2098,10 +2196,22 @@ Examples:
 - "No change."
 NEVER explain. NEVER justify. NEVER use multiple sentences.
 
+═══ CRITICAL — LIVE ENTRIES ONLY ═══
+NEVER call trades on past prices.
+The trader can ONLY enter at the CURRENT price NOW.
+Entry MUST be:
+- Within 0.05% of current live price, OR
+- A pending limit order at a level not yet reached (clearly state "limit order @ X")
+
+If a setup formed but price has already moved past the ideal entry, DO NOT call the trade.
+Say "missed" or "wait for next setup" instead.
+Never reference past candles for entry — only current price action.
+
 ═══ TRADE TAG ═══
 TRADE::LONG|ENTRY|SL|TP
 TRADE::SHORT|ENTRY|SL|TP
 TRADE::NONE
+ENTRY must be the CURRENT live price ± small spread, OR a pending level.
 
 ═══ MANAGEMENT ═══
 "move to breakeven" — at 50% to TP
@@ -2259,10 +2369,38 @@ async function sendChat(){
 }
 
 // ── TRADE BOX ─────────────────────────────────────────────────────────────────
+function manualCloseTrade(){
+  if(!activeTrade){return;}
+  const price=S.lastPrice;
+  if(!price){log('Cannot close — no live price','warn');return;}
+  const isBull=activeTrade.dir==='LONG';
+  const entry=parseFloat(activeTrade.entry);
+  const isWin=isBull?price>entry:price<entry;
+  if(!confirm(`Close ${activeTrade.dir} trade at ${price.toFixed(2)}?\n\nP&L: ${isWin?'+':''}${(isBull?(price-entry)/entry*100:(entry-price)/entry*100).toFixed(2)}%`))return;
+  onTradeClose('CLOSED MANUALLY',price,isWin);
+}
+
 function parseTrade(text){
   const m=text.match(/TRADE::(LONG|SHORT|NONE)\|?([0-9.]*)\|?([0-9.]*)\|?([0-9.]*)/);
   if(!m)return null;
-  return{dir:m[1],entry:m[2],sl:m[3],tp:m[4]};
+  const trade={dir:m[1],entry:m[2],sl:m[3],tp:m[4]};
+  // VALIDATION — reject stale entry prices
+  if(trade.dir!=='NONE'&&trade.entry&&S.lastPrice){
+    const entry=parseFloat(trade.entry);
+    const live=S.lastPrice;
+    const distance=Math.abs(entry-live)/live;
+    // allow up to 0.15% from current price (covers small spread + slippage)
+    // OR if it's a pending limit (further away in the right direction)
+    const isLong=trade.dir==='LONG';
+    const isPendingLimit=(isLong&&entry<live*0.999)||(!isLong&&entry>live*1.001);
+    if(distance>0.0015&&!isPendingLimit){
+      // entry too far from current price — likely retroactive
+      log(`⚠ Agent gave stale entry ${entry} (live: ${live.toFixed(2)}, distance: ${(distance*100).toFixed(2)}%) — rejected`,'warn');
+      addMsgToChat(`⚠ Trade rejected: entry ${entry} too far from live ${live.toFixed(2)}. Wait for next setup.`,'agent');
+      return null;
+    }
+  }
+  return trade;
 }
 
 // ── TRADE LINES ON CHART ──────────────────────────────────────────────────────
@@ -2361,6 +2499,15 @@ function drawTradeLines(trade){
   tradeCheckInterval=setInterval(()=>{
     const price=S.lastPrice;
     if(!price)return;
+
+    // track max profit & drawdown from entry (in %)
+    if(activeTrade){
+      const e=parseFloat(activeTrade.entry);
+      const pctMove=isBull?((price-e)/e*100):((e-price)/e*100);
+      if(pctMove>activeTrade.maxProfit)activeTrade.maxProfit=+pctMove.toFixed(3);
+      if(pctMove<activeTrade.maxDrawdown)activeTrade.maxDrawdown=+pctMove.toFixed(3);
+    }
+
     if(isBull){
       if(price<=sl){
         onTradeClose('STOP LOSS HIT',sl,false);
@@ -2391,6 +2538,8 @@ function onTradeClose(reason,hitPrice,isWin){
   activeTrade=null;
   document.getElementById('tradeBox').className='trade-box';
   document.getElementById('dirBadge').style.display='none';
+  const closeBtn=document.getElementById('manualCloseBtn');
+  if(closeBtn)closeBtn.style.display='none';
   document.getElementById('tradeLabel').textContent='TRADE CLOSED';
   document.getElementById('tradeLabel').style.color='var(--muted)';
   resetTradeExtras();
@@ -2493,11 +2642,19 @@ function detectTradeEvents(text){
       addTradeStatus('TP updated to '+v,'accent');
     }
   }
-  // CLOSE
-  if(/close.*trade|exit.*now|get out|close.*position|exit.*trade/i.test(text)&&!/stop loss/i.test(text)){
+  // CLOSE — actually close the trade, not just alert
+  if(/close.*trade|exit.*now|get out|close.*position|exit.*trade|close.*here|get.*out|exit.*here/i.test(text)&&!/stop loss/i.test(text)){
     addTradeStatus('Agent: CLOSE TRADE','bear');
-    showPopup('⚠ Agent says: Close the trade now','alert',10000);
+    showPopup('⚠ Agent closing trade','alert',8000);
     sendTelegram('⚠ <b>CLOSE TRADE NOW</b>\n\nAgent suggests exiting the position immediately.');
+    // determine if it's a win or loss based on current price
+    const price=S.lastPrice;
+    if(price&&activeTrade){
+      const isBull=activeTrade.dir==='LONG';
+      const entry=parseFloat(activeTrade.entry);
+      const isWin=isBull?price>entry:price<entry;
+      onTradeClose('CLOSED BY AGENT',price,isWin);
+    }
   }
   // HOLD
   if(/hold|stay in|let it run|keep holding/i.test(text)){
@@ -2510,13 +2667,41 @@ function updateTradeBox(t){
   const isBull=t.dir==='LONG';
   clearTradeLines();
   clearInterval(tradeCheckInterval);
-  // capture session context for journal
+
+  // ── CAPTURE FULL CONTEXT FOR JOURNAL ──
+  t.openedAt=Date.now();
   const m15=buildCtx('M15'),m5=buildCtx('M5'),m1=buildCtx('M1');
   if(m15&&m5&&m1){
     const cv=calcConviction(m15,m5,m1);
     t.convAtEntry=cv.score+'/'+cv.max;
-    t.sessionContext=getSessionContext().session;
   }
+  // session
+  t.sessionContext=getSessionContext().session;
+  // HTF snapshot
+  t.htfDaily=htfStructure.daily?.bias||null;
+  t.htfH4=htfStructure.h4?.bias||null;
+  t.htfH1=htfStructure.h1?.bias||null;
+  t.htfConfluence=document.getElementById('htfConfluence')?.textContent||null;
+  // derivatives
+  t.fundingRate=S.derivData?.fundingRate||null;
+  t.lsRatio=S.derivData?.lsRatio||null;
+  // BTC context for non-BTC pairs
+  const pair=document.getElementById('pairSelect').value;
+  if(pair!=='BTCUSDT'&&btcContext.trend){
+    t.btcTrend=btcContext.trend+' ('+btcContext.chgPct+'%)';
+  }
+  // setup type — guess from recent agent messages
+  const lastAgentMsg=S.chatHistory.filter(m=>m.role==='assistant').slice(-1)[0]?.content||'';
+  if(/sweep/i.test(lastAgentMsg))t.setupType='sweep';
+  else if(/BOS/i.test(lastAgentMsg))t.setupType='BOS';
+  else if(/FVG/i.test(lastAgentMsg))t.setupType='FVG';
+  else if(/OB|order block/i.test(lastAgentMsg))t.setupType='OB';
+  else t.setupType='other';
+
+  // tracking max drawdown / max profit during trade
+  t.maxDrawdown=0;
+  t.maxProfit=0;
+
   activeTrade=t;
 
   document.getElementById('tradeBox').className=`trade-box ${isBull?'bull':'bear'}`;
@@ -2530,6 +2715,9 @@ function updateTradeBox(t){
   badge.style.border=`1px solid ${isBull?'rgba(0,230,118,.4)':'rgba(255,61,87,.4)'}`;
   badge.style.boxShadow=`0 0 8px ${isBull?'rgba(0,230,118,.3)':'rgba(255,61,87,.3)'}`;
   badge.style.fontSize='clamp(.6rem,.8vw,.9rem)';
+  // show manual close button
+  const closeBtn=document.getElementById('manualCloseBtn');
+  if(closeBtn)closeBtn.style.display='';
   badge.style.letterSpacing='.15em';
   badge.style.fontWeight='700';
 
