@@ -182,6 +182,31 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
   </div>
 </div>
 
+<!-- BACKTEST MODAL -->
+<div id="backtestModal" style="display:none;position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:var(--s1);border:1px solid var(--purple);border-radius:6px;width:min(560px,92vw);position:relative;overflow:hidden">
+    <div style="height:2px;background:linear-gradient(90deg,transparent,var(--purple),transparent)"></div>
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-family:var(--display);font-weight:700;font-size:1rem;color:#fff">⚡ Backtest</div>
+        <div style="font-size:.52rem;letter-spacing:.1em;color:var(--muted);margin-top:2px">Test the ICT framework on real historical data</div>
+      </div>
+      <button onclick="closeBacktest()" style="background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;border-radius:3px;padding:4px 10px;font-family:var(--mono);font-size:.6rem">✕ CLOSE</button>
+    </div>
+    <div style="padding:20px">
+      <div style="background:var(--s2);border:1px solid var(--border);border-radius:3px;padding:12px;margin-bottom:14px">
+        <div style="font-size:.5rem;letter-spacing:.1em;color:var(--muted);margin-bottom:8px">PAIR</div>
+        <div style="font-family:var(--display);font-weight:700;font-size:1.2rem;color:var(--accent)" id="btPair">BTCUSDT</div>
+        <div style="font-size:.52rem;color:var(--muted);margin-top:6px;line-height:1.7">
+          Will fetch last 7 days of 5M candles (~3000 bars) and simulate every ICT setup that the agent's logic would have detected. Reports win rate, expectancy in R, and total profitability.
+        </div>
+      </div>
+      <button id="backtestBtn" onclick="runBacktest()" style="width:100%;background:linear-gradient(135deg,rgba(167,139,250,.2),rgba(167,139,250,.08));border:1px solid var(--purple);color:var(--purple);font-family:var(--mono);font-size:.7rem;letter-spacing:.15em;padding:12px 18px;border-radius:3px;cursor:pointer;font-weight:700;transition:all .2s" onmouseover="this.style.background='linear-gradient(135deg,rgba(167,139,250,.3),rgba(167,139,250,.15))'" onmouseout="this.style.background='linear-gradient(135deg,rgba(167,139,250,.2),rgba(167,139,250,.08))'">⚡ RUN BACKTEST</button>
+      <pre id="backtestResult" style="display:none;margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px;font-size:.62rem;color:var(--text);font-family:var(--mono);line-height:1.9;white-space:pre-wrap"></pre>
+    </div>
+  </div>
+</div>
+
 <!-- SETTINGS MODAL -->
 <div id="settingsModal" style="display:none;position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center">
   <div style="background:var(--s1);border:1px solid var(--border);border-radius:6px;width:min(480px,92vw);position:relative;overflow:hidden">
@@ -238,14 +263,6 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
         <button onclick="saveRiskSettings()" style="background:var(--s2);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:.55rem;letter-spacing:.1em;padding:7px 14px;border-radius:3px;cursor:pointer;font-weight:700">💾 SAVE RISK SETTINGS</button>
       </div>
 
-      <!-- BACKTEST -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:.52rem;letter-spacing:.15em;color:var(--accent);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">BACKTEST</div>
-        <div style="font-size:.55rem;color:var(--muted);margin-bottom:8px;line-height:1.6">Test the ICT framework on the last 7 days of data for the selected pair.</div>
-        <button id="backtestBtn" onclick="runBacktest()" style="background:linear-gradient(135deg,rgba(167,139,250,.15),rgba(167,139,250,.05));border:1px solid var(--purple);color:var(--purple);font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;padding:9px 18px;border-radius:3px;cursor:pointer;font-weight:700">⚡ RUN BACKTEST</button>
-        <pre id="backtestResult" style="display:none;margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:10px;font-size:.55rem;color:var(--text);font-family:var(--mono);line-height:1.7;white-space:pre-wrap"></pre>
-      </div>
-
       <!-- account info -->
       <div>
         <div style="font-size:.52rem;letter-spacing:.15em;color:var(--muted);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">ACCOUNT</div>
@@ -279,6 +296,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
       <div class="pill"><div class="dot off" id="liveDot"></div><span id="liveLabel">OFFLINE</span></div>
       <div class="pill" id="clock">--:--:-- EST</div>
       <button class="btn" id="voiceBtn" onclick="toggleVoice()" style="border-color:var(--muted)">🔊 VOICE</button>
+      <button class="btn" onclick="openBacktest()" style="border-color:var(--purple);color:var(--purple)">⚡ BACKTEST</button>
       <button class="btn" onclick="openSettings()" style="border-color:var(--muted)" id="settingsBtn">⚙ SETTINGS</button>
     </div>
   </div>
@@ -654,6 +672,18 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 
 // ── SETTINGS MODAL ────────────────────────────────────────────────────────────
+function openBacktest(){
+  document.getElementById('backtestModal').style.display='flex';
+  document.getElementById('btPair').textContent=document.getElementById('pairSelect').value;
+}
+function closeBacktest(){
+  document.getElementById('backtestModal').style.display='none';
+}
+// close on backdrop click
+document.getElementById('backtestModal')?.addEventListener('click',function(e){
+  if(e.target===this)closeBacktest();
+});
+
 function openSettings(){
   const modal=document.getElementById('settingsModal');
   modal.style.display='flex';
@@ -764,7 +794,7 @@ async function scanOtherPairs(){
       if(!Array.isArray(data))continue;
       const candles=data.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
       // quick conviction proxy
-      const sw=swings(candles),pd=pdaCalc(candles),fg=fvgs(candles),ob=obs(candles);
+      const sw=swings(candles),pd=pda(candles),fg=fvgs(candles),ob=obs(candles);
       let score=0;
       if(pd.pos==='DISCOUNT'||pd.pos==='PREMIUM')score++;
       if(sw.hi.length||sw.lo.length)score++;
@@ -821,7 +851,7 @@ async function runBacktest(){
     const recent=allCandles.slice(Math.max(0,i-30),i+1);
     const eq=eqLevels(recent,0.0015);
     const fg=fvgs(recent);
-    const pd=pdaCalc(recent);
+    const pd=pda(recent);
     const last=recent[recent.length-1];
     const prev=recent[recent.length-2];
 
