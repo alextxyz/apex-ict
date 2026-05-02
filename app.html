@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>APEX — ICT Scalp</title>
+<title>TXYZ — ICT Scalp</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 <script src="./lightweight-charts.js"></script>
 <style>
@@ -146,7 +146,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 <div class="wrap">
 <header>
   <div class="hrow">
-    <div class="logo">APEX<em>.</em>ICT <small>SCALP</small></div>
+    <div class="logo">TXYZ <small>SCALP</small></div>
     <div class="hright">
       <div class="pill"><div class="dot off" id="liveDot"></div><span id="liveLabel">OFFLINE</span></div>
       <div class="pill" id="clock">--:-- EST</div>
@@ -276,8 +276,15 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 const apexUser=sessionStorage.getItem('apex_user');
 if(!apexUser){window.location.href='index.html';}
 
-// Show username in header
+// ── LOAD SAVED API KEYS ───────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
+  // load saved keys for this user
+  const savedTD=localStorage.getItem(`apex_td_${apexUser}`);
+  const savedAnt=localStorage.getItem(`apex_ant_${apexUser}`);
+  if(savedTD)document.getElementById('tdKey').value=savedTD;
+  if(savedAnt)document.getElementById('antKey').value=savedAnt;
+
+  // show username in header
   const logoEl=document.querySelector('.logo');
   if(logoEl&&apexUser){
     const span=document.createElement('span');
@@ -294,6 +301,16 @@ window.addEventListener('DOMContentLoaded',()=>{
     btn.onclick=()=>{sessionStorage.removeItem('apex_user');window.location.href='index.html';};
     hright.appendChild(btn);
   }
+
+  // auto-save keys when changed
+  document.getElementById('tdKey').addEventListener('change',()=>{
+    const val=document.getElementById('tdKey').value.trim();
+    if(val)localStorage.setItem(`apex_td_${apexUser}`,val);
+  });
+  document.getElementById('antKey').addEventListener('change',()=>{
+    const val=document.getElementById('antKey').value.trim();
+    if(val)localStorage.setItem(`apex_ant_${apexUser}`,val);
+  });
 });
 
 const S={
@@ -741,6 +758,9 @@ function startSync(){
 async function startSession(){
   if(!document.getElementById('tdKey').value.trim()){alert('Enter Twelve Data key.\nFree at twelvedata.com');return;}
   if(!document.getElementById('antKey').value.trim()){alert('Enter Anthropic key.');return;}
+  // save keys for this user
+  localStorage.setItem(`apex_td_${apexUser}`,document.getElementById('tdKey').value.trim());
+  localStorage.setItem(`apex_ant_${apexUser}`,document.getElementById('antKey').value.trim());
   S.running=true;
   document.getElementById('startBtn').style.display='none';
   document.getElementById('stopBtn').style.display='';
