@@ -239,6 +239,24 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
           💾 SAVE KEY
         </button>
       </div>
+
+      <!-- TELEGRAM ALERTS -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:.52rem;letter-spacing:.15em;color:var(--accent);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">📱 TELEGRAM ALERTS</div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:.5rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">BOT TOKEN</div>
+          <input type="password" id="tgToken" placeholder="123456789:ABCdef..." style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.7rem;padding:7px 10px;border-radius:3px;outline:none">
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:.5rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">CHAT ID</div>
+          <input type="text" id="tgChatId" placeholder="123456789" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.7rem;padding:7px 10px;border-radius:3px;outline:none">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button onclick="saveTelegram()" style="background:var(--s2);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:.55rem;letter-spacing:.1em;padding:7px 14px;border-radius:3px;cursor:pointer;font-weight:700">💾 SAVE</button>
+          <button onclick="testTelegram()" style="background:var(--s2);border:1px solid var(--bull);color:var(--bull);font-family:var(--mono);font-size:.55rem;letter-spacing:.1em;padding:7px 14px;border-radius:3px;cursor:pointer;font-weight:700">📤 TEST MESSAGE</button>
+        </div>
+        <div id="tgStatus" style="font-size:.52rem;margin-top:10px;display:none"></div>
+      </div>
       <!-- RISK MANAGEMENT -->
       <div style="margin-bottom:20px">
         <div style="font-size:.52rem;letter-spacing:.15em;color:var(--accent);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">RISK MANAGEMENT</div>
@@ -694,6 +712,10 @@ function openSettings(){
   const ri=document.getElementById('rmRisk');if(ri)ri.value=r.riskPct;
   const go=document.getElementById('rmGoal');if(go)go.value=r.dailyGoal;
   const ml=document.getElementById('rmMaxLoss');if(ml)ml.value=r.dailyMaxLoss;
+  // load telegram
+  const tg=getTelegramConfig();
+  const tt=document.getElementById('tgToken');if(tt)tt.value=tg.token;
+  const tc=document.getElementById('tgChatId');if(tc)tc.value=tg.chatId;
 }
 function closeSettings(){
   document.getElementById('settingsModal').style.display='none';
@@ -814,7 +836,86 @@ async function scanOtherPairs(){
 }
 
 
-// ── BACKTEST MODE ─────────────────────────────────────────────────────────────
+// ── TELEGRAM ALERTS ───────────────────────────────────────────────────────────
+function getTelegramConfig(){
+  return{
+    token:localStorage.getItem(`txyz_tg_token_${apexUser}`)||'',
+    chatId:localStorage.getItem(`txyz_tg_chat_${apexUser}`)||'',
+  };
+}
+
+function saveTelegram(){
+  const token=document.getElementById('tgToken').value.trim();
+  const chatId=document.getElementById('tgChatId').value.trim();
+  if(!token||!chatId){
+    showTgStatus('⚠ Both token and chat ID required','#f0b429');
+    return;
+  }
+  if(!token.includes(':')){
+    showTgStatus('⚠ Token format invalid (should contain ":")','#f0b429');
+    return;
+  }
+  localStorage.setItem(`txyz_tg_token_${apexUser}`,token);
+  localStorage.setItem(`txyz_tg_chat_${apexUser}`,chatId);
+  showTgStatus('✓ Telegram saved','#00e676');
+}
+
+async function testTelegram(){
+  const tg=getTelegramConfig();
+  if(!tg.token||!tg.chatId){
+    // try unsaved values
+    const t=document.getElementById('tgToken').value.trim();
+    const c=document.getElementById('tgChatId').value.trim();
+    if(!t||!c){showTgStatus('⚠ Save credentials first','#f0b429');return;}
+    tg.token=t;tg.chatId=c;
+  }
+  showTgStatus('Sending test message…','#4a6a84');
+  const ok=await sendTelegram('🟢 TXYZ connected!\n\nIf you see this, your Telegram alerts are working. You\'ll receive trade signals, level hits, and important updates here.',tg);
+  if(ok){
+    showTgStatus('✓ Test message sent — check your Telegram','#00e676');
+  } else {
+    showTgStatus('✗ Failed — check token and chat ID','#ff3d57');
+  }
+}
+
+function showTgStatus(msg,color){
+  const el=document.getElementById('tgStatus');
+  if(!el)return;
+  el.textContent=msg;
+  el.style.color=color;
+  el.style.display='block';
+  setTimeout(()=>{el.style.display='none';},5000);
+}
+
+async function sendTelegram(text,configOverride){
+  const tg=configOverride||getTelegramConfig();
+  if(!tg.token||!tg.chatId)return false;
+  try{
+    const res=await fetch(`https://api.telegram.org/bot${tg.token}/sendMessage`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        chat_id:tg.chatId,
+        text:text,
+        parse_mode:'HTML',
+      }),
+    });
+    const d=await res.json();
+    return d.ok===true;
+  }catch(e){return false;}
+}
+
+// helper to format trade alert
+function tgFormatTrade(trade){
+  const isBull=trade.dir==='LONG';
+  const arrow=isBull?'🟢 LONG':'🔴 SHORT';
+  const pair=document.getElementById('pairSelect').value;
+  const e=parseFloat(trade.entry),s=parseFloat(trade.sl),tp=parseFloat(trade.tp);
+  const rr=(e&&s&&tp)?(Math.abs(tp-e)/Math.abs(e-s)).toFixed(2):'?';
+  return`<b>${arrow} ${pair}</b>\n\n<b>Entry:</b> ${trade.entry}\n<b>Stop Loss:</b> ${trade.sl}\n<b>Take Profit:</b> ${trade.tp}\n<b>R:R:</b> 1 : ${rr}\n\n<i>${new Date().toLocaleTimeString()}</i>`;
+}
+
+
 async function runBacktest(){
   const pair=document.getElementById('pairSelect').value;
   const btnEl=document.getElementById('backtestBtn');
@@ -1012,11 +1113,13 @@ function updateDailyPnL(){
     localStorage.setItem(`txyz_goalalert_${new Date().toDateString()}`,'1');
     showPopup(`🎯 Daily goal reached: $${stats.pnl.toFixed(0)}!`,'trade',10000);
     speak('Daily goal reached');
+    sendTelegram(`🎯 <b>DAILY GOAL REACHED</b>\n\nP&L: +$${stats.pnl.toFixed(0)} (${stats.pnlPct.toFixed(2)}%)\n${stats.wins}W / ${stats.losses}L today\n\nConsider stopping for the day.`);
   }
   if(stats.maxLossHit&&!localStorage.getItem(`txyz_maxalert_${new Date().toDateString()}`)){
     localStorage.setItem(`txyz_maxalert_${new Date().toDateString()}`,'1');
     showPopup(`⛔ Daily max loss hit: $${stats.pnl.toFixed(0)} — STOP TRADING`,'alert',15000);
     speak('Daily max loss reached. Stop trading.');
+    sendTelegram(`⛔ <b>MAX DAILY LOSS HIT</b>\n\nP&L: $${stats.pnl.toFixed(0)} (${stats.pnlPct.toFixed(2)}%)\n${stats.wins}W / ${stats.losses}L\n\nStop trading now. Come back tomorrow.`);
   }
 }
 
@@ -1386,6 +1489,7 @@ async function triggerLevelAlert(lvl,price){
     if(trade&&trade.dir!=='NONE')updateTradeBox(trade);
     addMsgToChat(display,'agent');
     showPopup(`⚡ ${lvl.label} HIT\n${display}`,'alert',12000);
+    sendTelegram(`⚡ <b>LEVEL HIT: ${lvl.label}</b>\n\nPrice: ${price.toFixed(2)}\n\n${display}`);
   }catch(e){log('Level alert error: '+e.message,'err');}
   setAgentStatus('watching');
 }
@@ -2174,6 +2278,7 @@ function onTradeClose(reason,hitPrice,isWin){
   addMsgToChat(`Trade closed — ${msg}`,'agent');
   log(msg,isWin?'ok':'warn');
   speak(isWin?'Take profit hit':'Stop loss hit');
+  sendTelegram(`${isWin?'✅':'❌'} <b>${reason}</b>\n\n${document.getElementById('pairSelect').value} closed @ ${hitPrice}`);
   updateJournalPanel();
 }
 
@@ -2189,6 +2294,7 @@ function setBreakeven(){
   log('Breakeven set at '+entry,'ok');
   showPopup('🔒 SL moved to Breakeven @ '+entry,'update',6000);
   speak('Move stop loss to breakeven');
+  sendTelegram(`🔒 <b>BREAKEVEN</b>\n\nMove SL to entry: ${entry}\nTrade is now risk-free.`);
 }
 
 function addPartial(price,note){
@@ -2234,6 +2340,7 @@ function detectTradeEvents(text){
     addPartial(price,note);
     addTradeStatus(note+' taken @ '+price,'bull');
     showPopup('✂ '+note+' @ '+price,'update',6000);
+    sendTelegram(`✂ <b>${note.toUpperCase()}</b>\n\nTake partial @ ${price}`);
   }
   // SL UPDATE
   const slm=text.match(/move.*sl.*?to.*?([0-9]{4,}\.?[0-9]*)|tighten.*sl.*?([0-9]{4,}\.?[0-9]*)/i);
@@ -2261,6 +2368,7 @@ function detectTradeEvents(text){
   if(/close.*trade|exit.*now|get out|close.*position|exit.*trade/i.test(text)&&!/stop loss/i.test(text)){
     addTradeStatus('Agent: CLOSE TRADE','bear');
     showPopup('⚠ Agent says: Close the trade now','alert',10000);
+    sendTelegram('⚠ <b>CLOSE TRADE NOW</b>\n\nAgent suggests exiting the position immediately.');
   }
   // HOLD
   if(/hold|stay in|let it run|keep holding/i.test(text)){
@@ -2319,6 +2427,7 @@ function updateTradeBox(t){
 
   drawTradeLines(t);
   speak(`New ${isBull?'long':'short'} trade. Entry ${t.entry}`);
+  sendTelegram(tgFormatTrade(t));
 }
 
 // ── CONVICTION MONITOR — updates every 30s, alerts on change ─────────────────
