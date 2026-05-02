@@ -70,6 +70,8 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .role-entry{border-color:rgba(167,139,250,.3);color:rgba(167,139,250,.7)}
 .price-info{font-size:clamp(.46rem,.54vw,.6rem);color:var(--muted)}
 .price-info span{color:var(--text)}
+.bar-countdown{font-size:clamp(.42rem,.5vw,.56rem);color:var(--gold);font-family:var(--mono);letter-spacing:.05em}
+.bar-countdown.urgent{color:var(--bear);animation:blink 1s infinite}
 .live-tag{font-size:clamp(.34rem,.4vw,.46rem);color:var(--bull);margin-left:5px;animation:pulse 2s infinite}
 .chart-body{flex:1;min-height:0;position:relative}
 .resize-handle{height:5px;background:transparent;cursor:ns-resize;position:relative;z-index:10;transition:background .15s;flex-shrink:0}
@@ -272,24 +274,33 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
     <div class="chart-grid">
       <div class="cpanel chart-wide">
         <div class="chdr">
-          <div><span class="tf-tag tf-M15">15M</span><span class="role role-draw">LIQUIDITY DRAW</span><span class="live-tag" id="liveTag" style="display:none">● LIVE</span></div>
-          <span class="price-info" id="meta-M15"></span>
+          <div><span class="tf-tag tf-M15">15M</span><span class="live-tag" id="liveTag" style="display:none">● LIVE</span></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
+            <span class="price-info" id="meta-M15"></span>
+            <span class="bar-countdown" id="cd-M15"></span>
+          </div>
         </div>
         <div class="chart-body" id="chart-M15"></div>
         <div class="resize-handle" id="rh-M15" title="Drag to resize"></div>
       </div>
       <div class="cpanel">
         <div class="chdr">
-          <div><span class="tf-tag tf-M5">5M</span><span class="role role-bos">BOS</span></div>
-          <span class="price-info" id="meta-M5"></span>
+          <div><span class="tf-tag tf-M5">5M</span></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
+            <span class="price-info" id="meta-M5"></span>
+            <span class="bar-countdown" id="cd-M5"></span>
+          </div>
         </div>
         <div class="chart-body" id="chart-M5"></div>
         <div class="resize-handle" id="rh-M5" title="Drag to resize"></div>
       </div>
       <div class="cpanel">
         <div class="chdr">
-          <div><span class="tf-tag tf-M1">1M</span><span class="role role-entry">ENTRY</span></div>
-          <span class="price-info" id="meta-M1"></span>
+          <div><span class="tf-tag tf-M1">1M</span></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
+            <span class="price-info" id="meta-M1"></span>
+            <span class="bar-countdown" id="cd-M1"></span>
+          </div>
         </div>
         <div class="chart-body" id="chart-M1"></div>
         <div class="resize-handle" id="rh-M1" title="Drag to resize"></div>
@@ -460,7 +471,31 @@ const TICKER_PAIRS=['btcusdt','ethusdt','bnbusdt','solusdt','xrpusdt','adausdt',
 
 let tickerPos=0,tickerRAF=null,tickerPaused=false;
 
-// ── CLOCK ─────────────────────────────────────────────────────────────────────
+// ── BAR COUNTDOWN — time left in current candle for each TF ──────────────────
+const TF_SECONDS={M15:15*60,M5:5*60,M1:60};
+
+function updateBarCountdowns(){
+  const now=Math.floor(Date.now()/1000);
+  ['M15','M5','M1'].forEach(k=>{
+    const seconds=TF_SECONDS[k];
+    const candleStart=Math.floor(now/seconds)*seconds;
+    const remaining=Math.max(0,(candleStart+seconds)-now);
+    const m=Math.floor(remaining/60);
+    const s=remaining%60;
+    const txt=`⏱ ${m}:${s.toString().padStart(2,'0')}`;
+    const el=document.getElementById('cd-'+k);
+    if(el){
+      el.textContent=txt;
+      // urgent in last 10 seconds
+      el.className='bar-countdown'+(remaining<=10?' urgent':'');
+    }
+  });
+}
+
+setInterval(updateBarCountdowns,1000);
+updateBarCountdowns();
+
+
 setInterval(()=>{
   const t=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
   document.getElementById('clock').textContent=t+' EST';
@@ -1031,6 +1066,17 @@ function initCharts(){
         chartHeights[k]=newH;
         el.style.height=newH+'px';
         if(S.charts[k])S.charts[k].applyOptions({height:newH});
+
+        // SYNC 5M and 1M together — they share the bottom row
+        if(k==='M5'||k==='M1'){
+          const otherKey=k==='M5'?'M1':'M5';
+          const otherEl=document.getElementById('chart-'+otherKey);
+          if(otherEl){
+            chartHeights[otherKey]=newH;
+            otherEl.style.height=newH+'px';
+            if(S.charts[otherKey])S.charts[otherKey].applyOptions({height:newH});
+          }
+        }
       };
       const onUp=()=>{
         document.body.style.cursor='';
@@ -1530,19 +1576,17 @@ function parseTrade(text){
 
 // ── TRADE LINES ON CHART ──────────────────────────────────────────────────────
 const tradeLinesSeries=[];
+const tradeBoxOverlays=[];
 let activeTrade=null;
 let tradeCheckInterval=null;
 
 function clearTradeLines(){
-  tradeLinesSeries.forEach(s=>{
-    try{
-      // remove from all charts
-      ['M15','M5','M1'].forEach(k=>{
-        try{S.charts[k]?.removeSeries(s);}catch(e){}
-      });
-    }catch(e){}
+  tradeLinesSeries.forEach(item=>{
+    try{if(item&&item.series&&item.line)item.series.removePriceLine(item.line);}catch(e){}
   });
   tradeLinesSeries.length=0;
+  tradeBoxOverlays.forEach(o=>{try{o.svg.remove();clearInterval(o.timer);}catch(e){}});
+  tradeBoxOverlays.length=0;
 }
 
 function drawTradeLines(trade){
@@ -1554,69 +1598,74 @@ function drawTradeLines(trade){
   const tp=parseFloat(trade.tp);
   if(!entry||!sl||!tp)return;
 
-  // draw on 1M and 5M charts (most relevant for scalp execution)
   ['M1','M5'].forEach(k=>{
+    const series=S.series[k];
     const chart=S.charts[k];
-    const candles=S.candles[k];
-    if(!chart||!candles.length)return;
-    const start=candles[Math.max(0,candles.length-5)].time;
-    const end=candles[candles.length-1].time+3600; // extend 1h into future
+    if(!series||!chart)return;
 
-    // ENTRY line — white dashed
-    const entrySeries=chart.addLineSeries({
-      color:'rgba(255,255,255,0.85)',
-      lineWidth:2,
-      lineStyle:0,
-      priceLineVisible:false,
-      lastValueVisible:true,
-      crosshairMarkerVisible:false,
-      title:'ENTRY',
-    });
-    entrySeries.setData([{time:start,value:entry},{time:end,value:entry}]);
-    tradeLinesSeries.push(entrySeries);
+    // price labels on axis
+    tradeLinesSeries.push({series,line:series.createPriceLine({
+      price:entry,color:'rgba(255,255,255,0.9)',lineWidth:1,lineStyle:2,
+      axisLabelVisible:true,title:'ENTRY',
+    })});
+    tradeLinesSeries.push({series,line:series.createPriceLine({
+      price:sl,color:'rgba(255,61,87,0.95)',lineWidth:1,lineStyle:0,
+      axisLabelVisible:true,title:'SL',
+    })});
+    tradeLinesSeries.push({series,line:series.createPriceLine({
+      price:tp,color:'rgba(0,230,118,0.95)',lineWidth:1,lineStyle:0,
+      axisLabelVisible:true,title:'TP',
+    })});
 
-    // SL line — red solid
-    const slSeries=chart.addLineSeries({
-      color:'rgba(255,61,87,0.9)',
-      lineWidth:2,
-      lineStyle:0,
-      priceLineVisible:false,
-      lastValueVisible:true,
-      crosshairMarkerVisible:false,
-      title:'SL',
-    });
-    slSeries.setData([{time:start,value:sl},{time:end,value:sl}]);
-    tradeLinesSeries.push(slSeries);
+    // SVG overlay for filled boxes
+    const chartEl=document.getElementById('chart-'+k);
+    if(!chartEl)return;
+    chartEl.style.position='relative';
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2';
+    chartEl.appendChild(svg);
 
-    // TP line — green solid
-    const tpSeries=chart.addLineSeries({
-      color:'rgba(0,230,118,0.9)',
-      lineWidth:2,
-      lineStyle:0,
-      priceLineVisible:false,
-      lastValueVisible:true,
-      crosshairMarkerVisible:false,
-      title:'TP',
-    });
-    tpSeries.setData([{time:start,value:tp},{time:end,value:tp}]);
-    tradeLinesSeries.push(tpSeries);
+    function redraw(){
+      const yEntry=series.priceToCoordinate(entry);
+      const ySL=series.priceToCoordinate(sl);
+      const yTP=series.priceToCoordinate(tp);
+      if(yEntry==null||ySL==null||yTP==null)return;
+      const w=chartEl.clientWidth;
+      const h=chartEl.clientHeight;
+      svg.setAttribute('width',w);
+      svg.setAttribute('height',h);
+      const priceScaleW=72;
+      const boxW=Math.max(0,w-priceScaleW);
+      svg.innerHTML='';
 
-    // filled zone between entry and TP (semi-transparent)
-    const zoneSeries=chart.addLineSeries({
-      color:isBull?'rgba(0,230,118,0.06)':'rgba(255,61,87,0.06)',
-      lineWidth:1,
-      lineStyle:2,
-      priceLineVisible:false,
-      lastValueVisible:false,
-      crosshairMarkerVisible:false,
-    });
-    // draw midpoint to create visual band
-    const mid=(entry+tp)/2;
-    zoneSeries.setData([{time:start,value:mid},{time:end,value:mid}]);
-    tradeLinesSeries.push(zoneSeries);
+      // GREEN ZONE — entry to TP (profit area)
+      const tpTop=Math.min(yEntry,yTP);
+      const tpH=Math.abs(yTP-yEntry);
+      const tpRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      tpRect.setAttribute('x',0);tpRect.setAttribute('y',tpTop);
+      tpRect.setAttribute('width',boxW);tpRect.setAttribute('height',tpH);
+      tpRect.setAttribute('fill','rgba(0,230,118,0.10)');
+      tpRect.setAttribute('stroke','rgba(0,230,118,0.3)');
+      tpRect.setAttribute('stroke-width','1');
+      svg.appendChild(tpRect);
+
+      // RED ZONE — entry to SL (risk area)
+      const slTop=Math.min(yEntry,ySL);
+      const slH=Math.abs(ySL-yEntry);
+      const slRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      slRect.setAttribute('x',0);slRect.setAttribute('y',slTop);
+      slRect.setAttribute('width',boxW);slRect.setAttribute('height',slH);
+      slRect.setAttribute('fill','rgba(255,61,87,0.10)');
+      slRect.setAttribute('stroke','rgba(255,61,87,0.3)');
+      slRect.setAttribute('stroke-width','1');
+      svg.appendChild(slRect);
+    }
+
+    redraw();
+    const timer=setInterval(redraw,300);
+    tradeBoxOverlays.push({svg,timer,redraw});
   });
 
-  // watch for SL/TP hit
   clearInterval(tradeCheckInterval);
   tradeCheckInterval=setInterval(()=>{
     const price=S.lastPrice;
