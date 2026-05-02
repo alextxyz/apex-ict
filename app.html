@@ -333,14 +333,30 @@ window.addEventListener('DOMContentLoaded',()=>{
   // auto-save keys when changed
   document.getElementById('tdKey').addEventListener('change',()=>{
     const val=document.getElementById('tdKey').value.trim();
-    if(val)localStorage.setItem(`apex_td_${apexUser}`,val);
+    if(val){
+      localStorage.setItem(`apex_td_${apexUser}`,val);
+      loadTicker(); // reload ticker immediately when key is set
+    }
   });
   document.getElementById('antKey').addEventListener('change',()=>{
     const val=document.getElementById('antKey').value.trim();
     if(val)localStorage.setItem(`apex_ant_${apexUser}`,val);
   });
   // start ticker immediately — no need to wait for session
-  setTimeout(()=>startTickerRefresh(),500);
+  setTimeout(()=>startTickerRefresh(),300);
+
+  // reinit chart heights on resize
+  window.addEventListener("resize",()=>{
+    if(!S.running)return;
+    ["M15","M5","M1"].forEach(k=>{
+      const el=document.getElementById("chart-"+k);
+      if(!el||!S.charts[k])return;
+      const rows=k==="M15"?2:2.5;
+      const h=getH(rows);
+      el.style.height=h+"px";
+      S.charts[k].resize(el.clientWidth,h);
+    });
+  });
 });
 
 const S={
@@ -412,8 +428,14 @@ function startTickerScroll(){
 }
 
 async function loadTicker(){
-  const key=document.getElementById('tdKey').value.trim();
-  if(!key)return;
+  // try saved key first, then input field
+  const key=(localStorage.getItem(`apex_td_${apexUser}`)||document.getElementById('tdKey').value||'').trim();
+  if(!key){
+    // no key yet — show placeholder rolling text
+    const track=document.getElementById('tickerTrack');
+    if(track.innerHTML.includes('LOADING'))return;
+    return;
+  }
   const track=document.getElementById('tickerTrack');
   try{
     const prices=[];
@@ -845,7 +867,6 @@ function startSync(){
 async function startSession(){
   if(!document.getElementById('tdKey').value.trim()){alert('Enter Twelve Data key.\nFree at twelvedata.com');return;}
   if(!document.getElementById('antKey').value.trim()){alert('Enter Anthropic key.');return;}
-  // save keys for this user
   localStorage.setItem(`apex_td_${apexUser}`,document.getElementById('tdKey').value.trim());
   localStorage.setItem(`apex_ant_${apexUser}`,document.getElementById('antKey').value.trim());
   S.running=true;
@@ -854,13 +875,16 @@ async function startSession(){
   document.getElementById('liveDot').className='dot live';
   document.getElementById('liveLabel').textContent='LIVE';
   document.getElementById('liveTag').style.display='';
+  // wait two frames so DOM has correct dimensions before chart init
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
   initCharts();
+  // another frame after chart init
+  await new Promise(r=>setTimeout(r,100));
   log('Loading data…','ok');
   await fetchAll();
   setAgentStatus('watching');
   document.getElementById('chatSend').disabled=false;
   startSync();
-  // auto-analyze immediately
   log('Starting analysis…','ok');
   await runAnalysis(false);
 }
