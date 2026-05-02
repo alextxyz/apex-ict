@@ -1968,28 +1968,39 @@ Daily goal: $${r.dailyGoal} | Max loss: $${r.dailyMaxLoss}
 ${dailyStats.goalReached?'🎯 GOAL REACHED — consider stopping for today':''}
 ${dailyStats.maxLossHit?'⛔ MAX LOSS HIT — STOP TRADING NOW':''}
 
-ICT FRAMEWORK:
+ICT FRAMEWORK (AGGRESSIVE MODE):
 - 15M: nearest BSL or SSL as draw on liquidity. DISCOUNT = look for longs. PREMIUM = shorts.
-- 5M: BOS after liquidity sweep confirms direction.
-- 1M: enter in FVG or OB left by 5M BOS impulse.
+- 5M: BOS or even just rejection candle confirms direction.
+- 1M: enter on any FVG, OB, or breaker — don't wait for perfect alignment.
 
-CRITICAL RULES:
-1. WAIT FOR CONFIRMATION — don't call trades until sweep + 5M close back inside structure + BOS forms. Use "WAITING FOR CONFIRMATION" if pending.
-2. Use HTF levels as targets when close — daily/weekly highs/lows are stronger magnets than 15M BSL.
-3. Use POC and Value Area — price outside VA tends to return to POC. Trade toward POC = high probability.
-4. Use liquidation clusters — heavy liq zones act as magnets. Price WILL revisit them.
-5. Bias against the crowd — funding overleveraged + L/S ratio crowded = setup for sweep against the majority.
-6. If max daily loss is hit, do NOT call any new trades. Tell trader to stop.
+AGGRESSIVE TRADING RULES:
+1. CALL TRADES OFTEN — if there's ANY decent setup (3+/7 conviction), call it. Don't wait for perfect.
+2. Multiple valid setups = call them. Don't say "WAIT" if liquidity is identified and there's any sweep or rejection.
+3. Use TIGHT SL — tight stops, small targets. 1:1.5 R:R is fine. Even 1:1 if confluence is strong.
+4. Use HTF levels as targets when close — daily/weekly highs/lows are stronger magnets.
+5. Use POC, Value Area, and liquidation clusters as targets/levels.
+6. Bias against the crowd — overleveraged funding + crowded L/S ratio = sweep ahead.
+7. If max daily loss is hit, STOP — only rule that's absolute.
+
+WHEN TO CALL A TRADE:
+- Sweep happened OR liquidity grab visible → CALL IT
+- Price entering a clear FVG or OB → CALL IT
+- BOS just formed → CALL IT
+- Price testing HTF level with rejection wick → CALL IT
+- Conviction 4+/7 with directional bias → CALL IT
+Don't wait for ALL conditions. 2-3 confluences = trade.
 
 CONVICTION SCORING:
-6-7/7 HIGH | 4-5/7 MEDIUM | <4/7 LOW (don't trade)
+6-7/7 HIGH (full size) | 4-5/7 MEDIUM (half size, tight SL) | 3/7 LOW (only if structure is very clean)
+Don't say "WAITING FOR CONFIRMATION" unless really nothing is forming. Be decisive.
 
 TRADE TAG (mandatory when calling a trade):
 TRADE::LONG|ENTRY|SL|TP or TRADE::SHORT|ENTRY|SL|TP or TRADE::NONE
 Use exact prices. Never explain this tag.
+DEFAULT: lean toward calling trades, not waiting.
 
-BREAKEVEN: say "move to breakeven" when ~50% to TP.
-PARTIALS: say "take partial" when at +1R.
+BREAKEVEN: say "move to breakeven" when ~30-50% to TP.
+PARTIALS: say "take partial" when at +1R or hit halfway.
 CLOSE: say "close trade" or "exit now" if invalidated.
 
 Be VERY concise — 1-2 sentences MAX. No bullets. Direct action.`;
@@ -2053,8 +2064,8 @@ async function runAnalysis(isAuto=false){
   S.marketContext=ctx;
   const isFirst=!prevCtx;
   const prompt=isFirst
-    ?`I just started monitoring ${document.getElementById('pairSelect').value}. Give me an immediate ICT scalp read — structure, draw, what to watch. Max 2 sentences.`
-    :`${document.getElementById('pairSelect').value} just updated. Any change in the last 2 minutes? New sweep, BOS, or setup forming? If nothing changed reply ONLY with "No change." Max 2 sentences.`;
+    ?`I just started monitoring ${document.getElementById('pairSelect').value}. Give me a scalp read AND if there's any tradeable setup right now (even mediocre) call it with TRADE::LONG/SHORT|entry|sl|tp. Don't say "wait" — find me something. Max 2 sentences.`
+    :`${document.getElementById('pairSelect').value} just updated. Look for ANY new setup forming — sweep, BOS, FVG fill, OB tap. If you see ANY tradeable opportunity, call it with TRADE::. Otherwise reply ONLY with "No change." Max 2 sentences.`;
   S.chatHistory.push({role:'user',content:prompt});
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
