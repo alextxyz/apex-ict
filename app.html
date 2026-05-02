@@ -2159,6 +2159,8 @@ ${journal?`History: ${journal.winRate}% WR (${journal.wins}W/${journal.losses}L)
 TODAY: ${dailyStats.trades} trades | $${dailyStats.pnl.toFixed(0)}
 ${dailyStats.maxLossHit?'⛔ MAX LOSS HIT — DO NOT TRADE':''}
 
+ACTIVE TRADE STATUS: ${activeTrade?`OPEN ${activeTrade.dir} @ ${activeTrade.entry} (SL ${activeTrade.sl} / TP ${activeTrade.tp})`:'NO ACTIVE TRADE — looking for fresh setups'}
+
 ═══ ICT FRAMEWORK ═══
 
 TOP-DOWN BIAS (decide direction from HTF):
@@ -2526,6 +2528,7 @@ function drawTradeLines(trade){
 
 function onTradeClose(reason,hitPrice,isWin){
   clearInterval(tradeCheckInterval);
+  tradeCheckInterval=null;
   clearTradeLines();
   // log to journal
   if(activeTrade){
@@ -2534,8 +2537,15 @@ function onTradeClose(reason,hitPrice,isWin){
     const pnlPct=isBull?((hitPrice-entry)/entry*100).toFixed(2):((entry-hitPrice)/entry*100).toFixed(2);
     const outcome=reason.includes('TAKE PROFIT')?'TP':reason.includes('STOP')?'SL':'MANUAL';
     logTradeToJournal(activeTrade,outcome,hitPrice,pnlPct);
+    // tell the agent explicitly that the trade is now closed
+    S.chatHistory.push({
+      role:'user',
+      content:`[SYSTEM] Trade ${activeTrade.dir} @ ${activeTrade.entry} was just CLOSED at ${hitPrice} (${reason}). Result: ${outcome}, P&L: ${pnlPct}%. There is NO active trade now. Look for fresh setups only — do NOT reference the closed trade unless asked.`
+    });
   }
   activeTrade=null;
+  // also clear watched levels from old trade
+  S.watchedLevels=S.watchedLevels.filter(l=>l.type!=='ENTRY'&&l.type!=='SL'&&l.type!=='TP');
   document.getElementById('tradeBox').className='trade-box';
   document.getElementById('dirBadge').style.display='none';
   const closeBtn=document.getElementById('manualCloseBtn');
