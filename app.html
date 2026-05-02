@@ -294,7 +294,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
         <div class="resize-handle" id="rh-M1" title="Drag to resize"></div>
       </div>
     </div>
-    <div class="log" id="log">System ready. Enter Anthropic key and press START.</div>
+    <div class="log" id="log">Starting up...</div>
   </div>
 
   <div class="apanel">
@@ -437,11 +437,16 @@ setInterval(()=>{
 
 // ── SAVE/LOAD KEYS ────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
-  // load saved key into hidden input and modal
-  const saved=localStorage.getItem(`txyz_ant_${apexUser}`);
+  // load saved key — check both storage keys for compatibility
+  const saved=localStorage.getItem(`txyz_ant_${apexUser}`)
+    ||localStorage.getItem(`apex_ant_${apexUser}`)
+    ||localStorage.getItem('txyz_ant_')  // fallback no user
+    ||'';
   if(saved){
     document.getElementById('antKey').value=saved;
     document.getElementById('antKeyModal').value=saved;
+    // migrate to new key name
+    localStorage.setItem(`txyz_ant_${apexUser}`,saved);
   }
 
   // set username in settings modal
@@ -1537,12 +1542,13 @@ function log(msg,type=''){
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
 async function startSession(){
-  if(S.running)return; // prevent double start
+  if(S.running)return;
   const antKey=document.getElementById('antKey').value.trim();
   if(!antKey){
     openSettings();
-    showSaveStatus('⚠ Paste your Anthropic key here to get started','#f0b429');
-    log('No API key — open Settings ⚙ to add your key','warn');
+    showSaveStatus('⚠ Paste your Anthropic key here to start','#f0b429');
+    log('No API key found — click ⚙ SETTINGS to add your Anthropic key','warn');
+    document.getElementById('liveLabel').textContent='NEED KEY';
     return;
   }
 
