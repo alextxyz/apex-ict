@@ -167,13 +167,6 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 <!-- POPUP NOTIFICATIONS -->
 <div class="popup-wrap" id="popupWrap"></div>
 
-<div class="ticker-wrap">
-  <div style="overflow:hidden;flex:1;position:relative">
-    <div class="ticker-track" id="tickerTrack">
-      <div class="tick-item"><span class="tick-sym" style="animation:blink 1s infinite">LOADING...</span></div>
-    </div>
-  </div>
-</div>
 
 <div class="wrap">
 <header>
@@ -335,7 +328,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     const val=document.getElementById('tdKey').value.trim();
     if(val){
       localStorage.setItem(`apex_td_${apexUser}`,val);
-      loadTicker(); // reload ticker immediately when key is set
+      
     }
   });
   document.getElementById('antKey').addEventListener('change',()=>{
@@ -343,7 +336,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(val)localStorage.setItem(`apex_ant_${apexUser}`,val);
   });
   // start ticker immediately — no need to wait for session
-  setTimeout(()=>startTickerRefresh(),300);
+  
 
   // reinit chart heights on resize
   window.addEventListener("resize",()=>{
