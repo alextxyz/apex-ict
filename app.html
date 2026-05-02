@@ -1940,13 +1940,16 @@ function connectWS(k){
     }
     S.series[k].update(candle);
     setMeta(k,arr);
+    // track last message time for staleness detection
+    S.wsLastMsg=S.wsLastMsg||{};
+    S.wsLastMsg[k]=Date.now();
   };
 
   ws.onerror=()=>log(`WS ${k} error`,'err');
   ws.onclose=()=>{
     if(S.running){
       log(`WS ${k} reconnecting…`,'warn');
-      setTimeout(()=>connectWS(k),3000);
+      setTimeout(()=>connectWS(k),2000);
     }
   };
   S.ws[k]=ws;
@@ -1954,9 +1957,47 @@ function connectWS(k){
 
 function connectAllWS(){
   ['M15','M5','M1'].forEach(k=>connectWS(k));
+  // start health monitor
+  startWSHealthMonitor();
 }
 
+// detect stalled WebSockets and force reconnect
+let wsHealthInterval=null;
+function startWSHealthMonitor(){
+  if(wsHealthInterval)clearInterval(wsHealthInterval);
+  S.wsLastMsg={M15:Date.now(),M5:Date.now(),M1:Date.now()};
+  wsHealthInterval=setInterval(()=>{
+    if(!S.running)return;
+    const now=Date.now();
+    // expected message intervals (Binance pings every ~3 sec for active candles)
+    const maxStale={M1:15000,M5:20000,M15:30000}; // generous thresholds
+    ['M15','M5','M1'].forEach(k=>{
+      const last=S.wsLastMsg?.[k]||0;
+      const age=now-last;
+      if(age>maxStale[k]){
+        log(`⚠ WS ${k} stalled ${Math.round(age/1000)}s — forcing reconnect`,'warn');
+        try{S.ws[k]?.close();}catch(e){}
+        // ws.onclose will trigger reconnect
+        S.wsLastMsg[k]=Date.now(); // reset to avoid spam
+      }
+    });
+  },5000);
+}
+
+// also handle tab visibility — browsers throttle background tabs
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&S.running){
+    log('Tab visible — refreshing connections','ok');
+    // force reconnect all to catch up
+    ['M15','M5','M1'].forEach(k=>{
+      try{S.ws[k]?.close();}catch(e){}
+    });
+    if(S.wsPrice)try{S.wsPrice.close();}catch(e){}
+  }
+});
+
 function closeAllWS(){
+  if(wsHealthInterval){clearInterval(wsHealthInterval);wsHealthInterval=null;}
   Object.values(S.ws).forEach(ws=>{try{ws?.close();}catch(e){}});
   S.ws={M15:null,M5:null,M1:null};
 }
