@@ -127,8 +127,8 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .chat-send:disabled{opacity:.4;cursor:not-allowed}
 
 /* POPUP */
-.popup-wrap{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;width:clamp(280px,22vw,380px)}
-.popup{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:12px 14px;pointer-events:all;transform:translateX(420px);opacity:0;transition:all .35s cubic-bezier(.175,.885,.32,1.275);position:relative;overflow:hidden;cursor:pointer;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.popup-wrap{position:fixed;bottom:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:5px;pointer-events:none;width:clamp(200px,16vw,280px)}
+.popup{background:rgba(12,16,23,.95);border:1px solid var(--border);border-radius:3px;padding:8px 10px;pointer-events:all;transform:translateX(300px);opacity:0;transition:all .3s cubic-bezier(.175,.885,.32,1.275);position:relative;overflow:hidden;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.5);backdrop-filter:blur(4px)}
 .popup.show{transform:translateX(0);opacity:1}
 .popup.hide{transform:translateX(420px);opacity:0}
 .popup::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
@@ -138,15 +138,15 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .popup.type-update::before{background:var(--purple)}
 .popup.type-alert::before{background:var(--gold)}
 .popup.type-alert{border-color:rgba(240,180,41,.3);animation:alertPulse .5s ease 3}
-.popup-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.popup-tag{font-size:clamp(.42rem,.5vw,.56rem);letter-spacing:.12em;font-weight:700;padding:2px 7px;border-radius:2px}
+.popup-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.popup-tag{font-size:.46rem;letter-spacing:.1em;font-weight:700;padding:1px 6px;border-radius:2px}
 .popup-tag.analysis{background:rgba(0,212,255,.12);color:var(--accent);border:1px solid rgba(0,212,255,.3)}
 .popup-tag.trade{background:rgba(0,230,118,.12);color:var(--bull);border:1px solid rgba(0,230,118,.3)}
 .popup-tag.trade.bear{background:rgba(255,61,87,.12);color:var(--bear);border:1px solid rgba(255,61,87,.3)}
 .popup-tag.update{background:rgba(167,139,250,.12);color:var(--purple);border:1px solid rgba(167,139,250,.3)}
-.popup-close{font-size:.7rem;color:var(--muted);cursor:pointer;padding:0 4px}
-.popup-body{font-size:clamp(.58rem,.68vw,.74rem);line-height:1.7;color:var(--text)}
-.popup-time{font-size:clamp(.44rem,.5vw,.56rem);color:var(--muted);margin-top:5px}
+.popup-close{font-size:.6rem;color:var(--muted);cursor:pointer;padding:0 3px}
+.popup-body{font-size:.6rem;line-height:1.55;color:var(--text)}
+.popup-time{font-size:.46rem;color:var(--muted);margin-top:3px}
 
 /* LIVE PRICE DISPLAY */
 .live-price-wrap{display:flex;align-items:baseline;gap:10px;padding:4px 0}
@@ -242,6 +242,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
     <div class="hright">
       <div class="pill"><div class="dot off" id="liveDot"></div><span id="liveLabel">OFFLINE</span></div>
       <div class="pill" id="clock">--:--:-- EST</div>
+      <button class="btn" id="voiceBtn" onclick="toggleVoice()" style="border-color:var(--muted)">🔊 VOICE</button>
       <button class="btn" onclick="openSettings()" style="border-color:var(--muted)" id="settingsBtn">⚙ SETTINGS</button>
     </div>
   </div>
@@ -311,6 +312,19 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
           <div id="convBar" style="height:100%;width:0%;border-radius:2px;transition:width .5s ease,background .5s ease"></div>
         </div>
         <div style="font-size:clamp(.44rem,.52vw,.58rem);color:var(--muted);line-height:1.7" id="convReasons"></div>
+      </div>
+    </div>
+
+    <!-- JOURNAL STATS -->
+    <div class="panel" id="journalPanel" style="display:none">
+      <div class="phdr">YOUR TRADING STATS<button class="btn" onclick="exportJournal()" style="font-size:.4rem;padding:2px 6px">EXPORT</button></div>
+      <div style="padding:10px 12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+          <div style="text-align:center"><div style="font-size:.42rem;color:var(--muted);letter-spacing:.1em;margin-bottom:3px">WIN RATE</div><div style="font-family:var(--display);font-weight:700;font-size:1rem" id="jWinRate">—</div></div>
+          <div style="text-align:center"><div style="font-size:.42rem;color:var(--muted);letter-spacing:.1em;margin-bottom:3px">TRADES</div><div style="font-family:var(--display);font-weight:700;font-size:1rem" id="jTotal">—</div></div>
+          <div style="text-align:center"><div style="font-size:.42rem;color:var(--muted);letter-spacing:.1em;margin-bottom:3px">W/L</div><div style="font-family:var(--display);font-weight:700;font-size:1rem" id="jWL">—</div></div>
+        </div>
+        <div style="font-size:.5rem;color:var(--muted);line-height:1.7;border-top:1px solid var(--border);padding-top:6px" id="jBreakdown">—</div>
       </div>
     </div>
 
@@ -494,6 +508,13 @@ window.addEventListener('DOMContentLoaded',()=>{
     });
   });
 
+  // sync voice button label
+  const vbtn=document.getElementById('voiceBtn');
+  if(vbtn)vbtn.textContent=voiceEnabled?'🔊 VOICE':'🔇 VOICE';
+
+  // show journal stats if any
+  setTimeout(updateJournalPanel,500);
+
   // chat drag-to-resize
   const chatHandle=document.getElementById('chatResizeHandle');
   const chatEl=document.getElementById('chatMessages');
@@ -586,7 +607,220 @@ document.getElementById('settingsModal').addEventListener('click',function(e){
   if(e.target===this)closeSettings();
 });
 
-// ── LIVE PRICE WEBSOCKET ──────────────────────────────────────────────────────
+// ── TIME OF DAY / SESSION CONTEXT ─────────────────────────────────────────────
+function getSessionContext(){
+  const now=new Date();
+  // EST hour
+  const estStr=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour:'2-digit',hour12:false}).format(now);
+  const estHour=parseInt(estStr);
+  const day=now.getUTCDay(); // 0=Sun
+  const isWeekend=day===0||day===6;
+
+  let session='ASIA';
+  if(estHour>=3&&estHour<8)session='LONDON';
+  else if(estHour>=8&&estHour<16)session='NY';
+  else if(estHour>=16&&estHour<20)session='AFTER-HOURS';
+
+  let regime='NORMAL';
+  if(isWeekend)regime='WEEKEND (low volume, expect chop)';
+  else if(session==='ASIA'&&estHour<3)regime='QUIET ASIA (low volume)';
+  else if(session==='LONDON')regime='LONDON OPEN (high volume)';
+  else if(session==='NY')regime='NY SESSION (highest volume)';
+
+  return{session,regime,estHour,isWeekend};
+}
+
+
+let voiceEnabled=localStorage.getItem(`txyz_voice_${apexUser}`)!=='false';
+
+function speak(text){
+  if(!voiceEnabled||!window.speechSynthesis)return;
+  try{
+    window.speechSynthesis.cancel(); // cancel previous
+    const u=new SpeechSynthesisUtterance(text);
+    u.rate=1.05;
+    u.pitch=1.0;
+    u.volume=0.85;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+function toggleVoice(){
+  voiceEnabled=!voiceEnabled;
+  localStorage.setItem(`txyz_voice_${apexUser}`,voiceEnabled?'true':'false');
+  const btn=document.getElementById('voiceBtn');
+  if(btn)btn.textContent=voiceEnabled?'🔊 VOICE':'🔇 VOICE';
+  log(voiceEnabled?'Voice alerts ON':'Voice alerts OFF','ok');
+}
+
+
+const SCAN_PAIRS=['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','AVAXUSDT'];
+let scannerLastAlert={};
+
+async function scanOtherPairs(){
+  if(!S.running)return;
+  const currentPair=document.getElementById('pairSelect').value;
+  for(const pair of SCAN_PAIRS){
+    if(pair===currentPair)continue; // skip current
+    try{
+      // fetch quick snapshot — just 15M for speed
+      const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${pair}&interval=15m&limit=20`);
+      const data=await r.json();
+      if(!Array.isArray(data))continue;
+      const candles=data.map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4]}));
+      // quick conviction proxy
+      const sw=swings(candles),pd=pdaCalc(candles),fg=fvgs(candles),ob=obs(candles);
+      let score=0;
+      if(pd.pos==='DISCOUNT'||pd.pos==='PREMIUM')score++;
+      if(sw.hi.length||sw.lo.length)score++;
+      if(fg.length>=2)score++;
+      if(ob.length>=2)score++;
+      if(score>=4){
+        const last=scannerLastAlert[pair]||0;
+        if(Date.now()-last>900000){ // 15 min cooldown per pair
+          scannerLastAlert[pair]=Date.now();
+          showPopup(`👀 ${pair.replace('USDT','')} setup ${score}/4 — ${pd.pos}`,'update',5000);
+          log(`Scanner: ${pair} score ${score}/4`,'ok');
+        }
+      }
+      await new Promise(r=>setTimeout(r,300));
+    }catch(e){}
+  }
+}
+
+
+let orderBookData={bidWalls:[],askWalls:[],imbalance:null,topBid:null,topAsk:null};
+
+async function fetchOrderBook(){
+  const pair=document.getElementById('pairSelect').value;
+  try{
+    const r=await fetch(`https://api.binance.com/api/v3/depth?symbol=${pair}&limit=100`);
+    const data=await r.json();
+    if(!data.bids||!data.asks)return;
+
+    const bids=data.bids.map(([p,q])=>({price:parseFloat(p),size:parseFloat(q)}));
+    const asks=data.asks.map(([p,q])=>({price:parseFloat(p),size:parseFloat(q)}));
+
+    // total volume in top 100 levels
+    const bidVol=bids.reduce((s,b)=>s+b.size,0);
+    const askVol=asks.reduce((s,a)=>s+a.size,0);
+    const imbalance=((bidVol-askVol)/(bidVol+askVol))*100;
+
+    // find walls — orders 5x larger than average
+    const bidAvg=bidVol/bids.length;
+    const askAvg=askVol/asks.length;
+    const bidWalls=bids.filter(b=>b.size>bidAvg*5).slice(0,3);
+    const askWalls=asks.filter(a=>a.size>askAvg*5).slice(0,3);
+
+    orderBookData={
+      bidWalls:bidWalls.map(w=>({price:w.price.toFixed(2),size:Math.round(w.size)})),
+      askWalls:askWalls.map(w=>({price:w.price.toFixed(2),size:Math.round(w.size)})),
+      imbalance:imbalance.toFixed(1),
+      bias:imbalance>15?'STRONG BID PRESSURE':imbalance<-15?'STRONG ASK PRESSURE':'BALANCED',
+      topBid:bids[0]?.price.toFixed(2),
+      topAsk:asks[0]?.price.toFixed(2),
+    };
+  }catch(e){}
+}
+
+
+let btcContext={trend:null,price:null,chgPct:null};
+
+function updateJournalPanel(){
+  const j=getJournalSummary();
+  if(!j||j.total===0){
+    const p=document.getElementById('journalPanel');
+    if(p)p.style.display='none';
+    return;
+  }
+  const p=document.getElementById('journalPanel');
+  if(!p)return;
+  p.style.display='';
+  document.getElementById('jWinRate').textContent=j.winRate+'%';
+  document.getElementById('jWinRate').style.color=j.winRate>=60?'var(--bull)':j.winRate>=40?'var(--gold)':'var(--bear)';
+  document.getElementById('jTotal').textContent=j.total;
+  document.getElementById('jWL').textContent=j.wins+'/'+j.losses;
+  document.getElementById('jBreakdown').innerHTML=`Long: <span style="color:var(--bull)">${j.longRate}%</span> · Short: <span style="color:var(--bear)">${j.shortRate}%</span>`;
+}
+
+function exportJournal(){
+  const j=loadJournal();
+  if(!j.length){alert('No trades to export yet');return;}
+  const blob=new Blob([JSON.stringify(j,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`txyz_journal_${apexUser}_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();URL.revokeObjectURL(url);
+}
+
+
+
+async function fetchBTCContext(){
+  try{
+    const r=await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&limit=12');
+    const data=await r.json();
+    if(!Array.isArray(data)||data.length<3)return;
+    const prices=data.map(k=>parseFloat(k[4]));
+    const first=prices[0],last=prices[prices.length-1];
+    const chgPct=((last-first)/first)*100;
+    btcContext={
+      trend:chgPct>0.3?'BULLISH':chgPct<-0.3?'BEARISH':'NEUTRAL',
+      price:last,
+      chgPct:chgPct.toFixed(2),
+    };
+  }catch(e){}
+}
+
+
+function getJournalKey(){return `txyz_journal_${apexUser}`;}
+function loadJournal(){
+  try{return JSON.parse(localStorage.getItem(getJournalKey())||'[]');}catch(e){return [];}
+}
+function saveJournal(j){
+  try{localStorage.setItem(getJournalKey(),JSON.stringify(j.slice(-200)));}catch(e){}
+}
+
+function logTradeToJournal(trade,outcome,exitPrice,pnlPct){
+  const j=loadJournal();
+  j.push({
+    id:Date.now(),
+    pair:document.getElementById('pairSelect').value,
+    dir:trade.dir,
+    entry:trade.entry,
+    sl:trade.sl,
+    tp:trade.tp,
+    exitPrice,
+    outcome, // 'TP','SL','MANUAL','BREAKEVEN'
+    pnlPct,
+    convAtEntry:trade.convAtEntry||null,
+    timestamp:new Date().toISOString(),
+    sessionContext:trade.sessionContext||'',
+  });
+  saveJournal(j);
+}
+
+function getJournalSummary(){
+  const j=loadJournal();
+  if(!j.length)return null;
+  const recent=j.slice(-30);
+  const wins=recent.filter(t=>t.outcome==='TP').length;
+  const losses=recent.filter(t=>t.outcome==='SL').length;
+  const total=recent.length;
+  const winRate=total?Math.round((wins/total)*100):0;
+  // group by direction
+  const longs=recent.filter(t=>t.dir==='LONG');
+  const shorts=recent.filter(t=>t.dir==='SHORT');
+  const longWins=longs.filter(t=>t.outcome==='TP').length;
+  const shortWins=shorts.filter(t=>t.outcome==='TP').length;
+  return{
+    total,wins,losses,winRate,
+    longRate:longs.length?Math.round((longWins/longs.length)*100):0,
+    shortRate:shorts.length?Math.round((shortWins/shorts.length)*100):0,
+    last:recent[recent.length-1],
+  };
+}
+
+
 function connectPriceWS(){
   const pair=document.getElementById('pairSelect').value.toLowerCase();
   if(S.wsPrice)try{S.wsPrice.close();}catch(e){}
@@ -1085,10 +1319,31 @@ ${cv.reasons.join(' | ')||'No factors confirmed yet'}`;
 
 // ── AGENT SYSTEM ──────────────────────────────────────────────────────────────
 function buildSystem(){
+  const session=getSessionContext();
+  const journal=getJournalSummary();
+  const isBTC=document.getElementById('pairSelect').value==='BTCUSDT';
   return`You are an elite ICT scalp analyst for crypto with deep expertise in derivatives markets. The trader scalps — trades last 5–20 minutes.
 
 CURRENT MARKET DATA:
 ${S.marketContext||'No data yet.'}
+
+TIME CONTEXT:
+Session: ${session.session} | Regime: ${session.regime} | EST Hour: ${session.estHour}${session.isWeekend?' | WEEKEND':''}
+
+${!isBTC&&btcContext.trend?`BTC CONTEXT (correlation):
+BTC 1h trend: ${btcContext.trend} (${btcContext.chgPct}% in last hour) at ${btcContext.price?.toFixed(2)}
+${btcContext.trend==='BEARISH'?'⚠ BTC DUMPING — be cautious on alt longs':btcContext.trend==='BULLISH'?'BTC pumping — alt longs supported':'BTC neutral — pair-specific setup'}`:''}
+
+${orderBookData.imbalance?`ORDER BOOK:
+Imbalance: ${orderBookData.imbalance}% — ${orderBookData.bias}
+Top Bid: ${orderBookData.topBid} | Top Ask: ${orderBookData.topAsk}
+${orderBookData.bidWalls.length?'Bid walls: '+orderBookData.bidWalls.map(w=>w.price+' ('+w.size+')').join(', '):''}
+${orderBookData.askWalls.length?'Ask walls: '+orderBookData.askWalls.map(w=>w.price+' ('+w.size+')').join(', '):''}`:''}
+
+${journal?`TRADER HISTORY (last ${journal.total} trades):
+Win rate: ${journal.winRate}% (${journal.wins}W / ${journal.losses}L)
+Long bias success: ${journal.longRate}% | Short bias success: ${journal.shortRate}%
+${journal.last?`Last trade: ${journal.last.dir} on ${journal.last.pair} → ${journal.last.outcome}`:''}`:''}
 
 YOUR FULL FRAMEWORK:
 
@@ -1097,17 +1352,24 @@ ICT STRUCTURE:
 - 5M: wait for BOS (Break of Structure) AFTER a liquidity sweep — this confirms direction.
 - 1M: enter in the FVG or OB left by the 5M BOS impulse. SL below swept low (long) or above swept high (short).
 
-DERIVATIVES CONTEXT (use this to filter trades):
-- HIGH funding rate (>0.05%) = market overleveraged long = bias SHORT or be cautious on longs
-- NEGATIVE funding (<-0.01%) = market overleveraged short = bias LONG or be cautious on shorts
-- Long/Short ratio >1.2 = crowded longs = price likely to sweep BSL to liquidate them
-- Long/Short ratio <0.8 = crowded shorts = price likely to sweep SSL to liquidate them
-- High OI + price moving = strong conviction. OI dropping = move losing steam.
+CRITICAL — WAIT FOR CONFIRMATION:
+Do NOT call a trade just because liquidity is identified. Wait for:
+1. The sweep to actually complete (price tags level and rejects)
+2. A 5M close back inside structure
+3. Then the BOS forms
+If any of these is pending, say "WAITING FOR CONFIRMATION" and explain what's needed. No premature entries.
+
+DERIVATIVES CONTEXT:
+- HIGH funding (>0.05%) = overleveraged longs = bias SHORT
+- NEGATIVE funding (<-0.01%) = overleveraged shorts = bias LONG
+- L/S ratio >1.2 = crowded longs = sweep BSL likely
+- L/S ratio <0.8 = crowded shorts = sweep SSL likely
+- Order book imbalance >15% one side = pressure in that direction
 
 CONVICTION SCORING:
-- Score 6-7/7 = HIGH CONVICTION — ideal entry, go for it
-- Score 4-5/7 = MEDIUM — valid setup but be selective, tighter SL
-- Score <4/7 = LOW — wait for better alignment, do NOT trade
+- 6-7/7 = HIGH — ideal entry
+- 4-5/7 = MEDIUM — selective, tighter SL
+- <4/7 = LOW — wait
 
 SCALP TARGETS: small and close — nearest liquidity on 15M. 5–20 min holds max.
 
@@ -1118,13 +1380,15 @@ TRADE::SHORT|ENTRY_PRICE|SL_PRICE|TP_PRICE
 TRADE::NONE
 Use exact prices from the market data. Never explain this tag.
 
-BREAKEVEN: If price has moved enough in the trade direction and you recommend moving SL to entry, say "move to breakeven" or "set breakeven" in your message. The system will automatically update the trade box.
+BREAKEVEN: If price has moved ~50% toward TP, say "move to breakeven" — system auto-updates.
+PARTIALS: Say "take partial" or "scale out 50%" when price hits halfway to TP.
+CLOSE: Say "close trade" or "exit now" when conviction drops sharply or PDA invalidates.
 
 Be VERY concise — 1-2 sentences MAX unless trader asks for more. No bullet points. Direct and decisive. Single clear action only.`;
 }
 
 // ── POPUP ─────────────────────────────────────────────────────────────────────
-function showPopup(text,type='analysis',duration=7000){
+function showPopup(text,type='analysis',duration=5000){
   const wrap=document.getElementById('popupWrap');
   const isBear=text.toLowerCase().includes('short')||text.toLowerCase().includes('bearish');
   const popup=document.createElement('div');
@@ -1376,8 +1640,15 @@ function drawTradeLines(trade){
 function onTradeClose(reason,hitPrice,isWin){
   clearInterval(tradeCheckInterval);
   clearTradeLines();
+  // log to journal
+  if(activeTrade){
+    const entry=parseFloat(activeTrade.entry);
+    const isBull=activeTrade.dir==='LONG';
+    const pnlPct=isBull?((hitPrice-entry)/entry*100).toFixed(2):((entry-hitPrice)/entry*100).toFixed(2);
+    const outcome=reason.includes('TAKE PROFIT')?'TP':reason.includes('STOP')?'SL':'MANUAL';
+    logTradeToJournal(activeTrade,outcome,hitPrice,pnlPct);
+  }
   activeTrade=null;
-  // reset trade box
   document.getElementById('tradeBox').className='trade-box';
   document.getElementById('dirBadge').style.display='none';
   document.getElementById('tradeLabel').textContent='TRADE CLOSED';
@@ -1394,6 +1665,8 @@ function onTradeClose(reason,hitPrice,isWin){
   showPopup(msg,isWin?'trade':'alert',8000);
   addMsgToChat(`Trade closed — ${msg}`,'agent');
   log(msg,isWin?'ok':'warn');
+  speak(isWin?'Take profit hit':'Stop loss hit');
+  updateJournalPanel();
 }
 
 function setBreakeven(){
@@ -1407,6 +1680,7 @@ function setBreakeven(){
   addTradeStatus('🔒 SL moved to Breakeven @ '+entry,'gold');
   log('Breakeven set at '+entry,'ok');
   showPopup('🔒 SL moved to Breakeven @ '+entry,'update',6000);
+  speak('Move stop loss to breakeven');
 }
 
 function addPartial(price,note){
@@ -1491,6 +1765,13 @@ function updateTradeBox(t){
   const isBull=t.dir==='LONG';
   clearTradeLines();
   clearInterval(tradeCheckInterval);
+  // capture session context for journal
+  const m15=buildCtx('M15'),m5=buildCtx('M5'),m1=buildCtx('M1');
+  if(m15&&m5&&m1){
+    const cv=calcConviction(m15,m5,m1);
+    t.convAtEntry=cv.score+'/'+cv.max;
+    t.sessionContext=getSessionContext().session;
+  }
   activeTrade=t;
 
   document.getElementById('tradeBox').className=`trade-box ${isBull?'bull':'bear'}`;
@@ -1521,6 +1802,7 @@ function updateTradeBox(t){
   document.getElementById('tradeTime').textContent=' · '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
 
   drawTradeLines(t);
+  speak(`New ${isBull?'long':'short'} trade. Entry ${t.entry}`);
 }
 
 // ── CONVICTION MONITOR — updates every 30s, alerts on change ─────────────────
@@ -1687,7 +1969,6 @@ async function startSession(){
   log('Initializing…');
 
   try{
-    // ensure full layout render before measuring chart dimensions
     await new Promise(r=>setTimeout(r,150));
     initCharts();
     await new Promise(r=>setTimeout(r,100));
@@ -1698,6 +1979,14 @@ async function startSession(){
     log('Fetching derivatives data…');
     await fetchDerivData();
     S.derivTick=setInterval(fetchDerivData,60000);
+
+    log('Fetching order book…');
+    await fetchOrderBook();
+    setInterval(fetchOrderBook,30000);
+
+    log('Fetching BTC correlation context…');
+    await fetchBTCContext();
+    setInterval(fetchBTCContext,120000);
 
     log('Connecting WebSocket streams…');
     connectAllWS();
@@ -1712,6 +2001,10 @@ async function startSession(){
     clearInterval(S.analysisTick);
     S.analysisTick=setInterval(()=>{if(S.running)runAnalysis(true);},120000);
     startConvictionMonitor();
+
+    // multi-pair scanner every 5 min
+    setInterval(scanOtherPairs,300000);
+    setTimeout(scanOtherPairs,30000); // first scan 30s after start
 
   }catch(e){
     log('Startup error: '+e.message,'err');
