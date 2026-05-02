@@ -106,9 +106,14 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .agent-dot.thinking{background:var(--gold);animation:blink .8s infinite}
 
 /* CHAT */
-.chat-messages{min-height:100px;max-height:clamp(180px,28vh,420px);overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.chat-messages{min-height:140px;max-height:clamp(200px,40vh,600px);overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;resize:vertical}
 .chat-messages::-webkit-scrollbar{width:3px}
 .chat-messages::-webkit-scrollbar-thumb{background:var(--border)}
+/* resize grip indicator */
+.chat-resize-handle{height:6px;background:var(--s2);border-top:1px solid var(--border);cursor:ns-resize;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}
+.chat-resize-handle:hover{background:rgba(0,212,255,.08)}
+.chat-resize-handle::after{content:'';width:32px;height:2px;background:var(--border);border-radius:1px;transition:background .15s}
+.chat-resize-handle:hover::after{background:var(--accent)}
 .msg{padding:7px 10px;border-radius:3px;font-size:clamp(.58rem,.68vw,.74rem);line-height:1.7}
 .msg.user{background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.15);color:var(--accent);align-self:flex-end;max-width:92%}
 .msg.agent{background:var(--s2);border:1px solid var(--border);color:var(--text);align-self:flex-start;max-width:96%}
@@ -131,6 +136,8 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .popup.type-trade::before{background:var(--bull)}
 .popup.type-trade.bear::before{background:var(--bear)}
 .popup.type-update::before{background:var(--purple)}
+.popup.type-alert::before{background:var(--gold)}
+.popup.type-alert{border-color:rgba(240,180,41,.3);animation:alertPulse .5s ease 3}
 .popup-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .popup-tag{font-size:clamp(.42rem,.5vw,.56rem);letter-spacing:.12em;font-weight:700;padding:2px 7px;border-radius:2px}
 .popup-tag.analysis{background:rgba(0,212,255,.12);color:var(--accent);border:1px solid rgba(0,212,255,.3)}
@@ -141,9 +148,20 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .popup-body{font-size:clamp(.58rem,.68vw,.74rem);line-height:1.7;color:var(--text)}
 .popup-time{font-size:clamp(.44rem,.5vw,.56rem);color:var(--muted);margin-top:5px}
 
+/* LIVE PRICE DISPLAY */
+.live-price-wrap{display:flex;align-items:baseline;gap:10px;padding:4px 0}
+.live-price-sym{font-family:var(--display);font-weight:700;font-size:clamp(.8rem,1.2vw,1.4rem);color:var(--muted);letter-spacing:.05em}
+.live-price-val{font-family:var(--display);font-weight:800;font-size:clamp(1.3rem,2.4vw,2.8rem);color:#fff;letter-spacing:-.02em;transition:color .2s}
+.live-price-val.flash-up{color:var(--bull);text-shadow:0 0 20px rgba(0,230,118,.4)}
+.live-price-val.flash-down{color:var(--bear);text-shadow:0 0 20px rgba(255,61,87,.4)}
+.live-price-chg{font-size:clamp(.62rem,.9vw,1rem);font-family:var(--mono);font-weight:700;padding:2px 8px;border-radius:3px}
+.live-price-chg.up{color:var(--bull);background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25)}
+.live-price-chg.down{color:var(--bear);background:rgba(255,61,87,.1);border:1px solid rgba(255,61,87,.25)}
+
 .log{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:5px 9px;font-size:clamp(.46rem,.54vw,.6rem);color:var(--muted);line-height:1.9;max-height:44px;overflow-y:auto;margin-top:6px}
 .ok{color:var(--bull)}.warn{color:var(--gold)}.err{color:var(--bear)}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes alertPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 20px rgba(240,180,41,.5)}}
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-thumb{background:var(--border)}
 </style>
@@ -212,7 +230,15 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 
 <header>
   <div class="hrow">
-    <div class="logo">TX<em>Y</em>Z</div>
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div class="logo">TX<em>Y</em>Z</div>
+      <!-- LIVE PRICE -->
+      <div class="live-price-wrap" id="livePriceWrap" style="display:none">
+        <span class="live-price-sym" id="livePriceSym">BTC</span>
+        <span class="live-price-val" id="livePriceVal">—</span>
+        <span class="live-price-chg" id="livePriceChg"></span>
+      </div>
+    </div>
     <div class="hright">
       <div class="pill"><div class="dot off" id="liveDot"></div><span id="liveLabel">OFFLINE</span></div>
       <div class="pill" id="clock">--:--:-- EST</div>
@@ -274,10 +300,17 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
   <div class="apanel">
     <!-- CONVICTION SCORE -->
     <div class="panel" id="convPanel" style="display:none">
-      <div class="phdr">CONVICTION SCORE</div>
-      <div style="padding:10px 12px;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-family:var(--display);font-weight:700;font-size:1.4rem" id="convScore">—</div>
-        <div style="font-size:clamp(.44rem,.52vw,.58rem);color:var(--muted);text-align:right;max-width:200px" id="convReasons"></div>
+      <div class="phdr">CONVICTION SCORE<span id="convTime" style="font-size:.44rem"></span></div>
+      <div style="padding:10px 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-family:var(--display);font-weight:700;font-size:1.5rem" id="convScore">—</div>
+          <div id="convDelta" style="font-size:.6rem;font-family:var(--mono)"></div>
+        </div>
+        <!-- progress bar -->
+        <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:8px">
+          <div id="convBar" style="height:100%;width:0%;border-radius:2px;transition:width .5s ease,background .5s ease"></div>
+        </div>
+        <div style="font-size:clamp(.44rem,.52vw,.58rem);color:var(--muted);line-height:1.7" id="convReasons"></div>
       </div>
     </div>
 
@@ -291,10 +324,23 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
         </div>
         <div class="trade-grid">
           <div class="trade-cell"><div class="trade-cell-lbl">ENTRY</div><div class="trade-cell-val entry" id="tradeEntry">—</div></div>
-          <div class="trade-cell"><div class="trade-cell-lbl">STOP LOSS</div><div class="trade-cell-val sl" id="tradeSL">—</div></div>
+          <div class="trade-cell"><div class="trade-cell-lbl" id="slLabel">STOP LOSS</div><div class="trade-cell-val sl" id="tradeSL">—</div></div>
           <div class="trade-cell"><div class="trade-cell-lbl">TAKE PROFIT</div><div class="trade-cell-val tp" id="tradeTP">—</div></div>
         </div>
         <div class="rr-row"><span class="rr-lbl">RISK / REWARD</span><span class="rr-val" id="rrVal">—</span></div>
+
+        <!-- PARTIALS -->
+        <div id="partialsSection" style="display:none;border-top:1px solid var(--border);padding:8px 10px">
+          <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">PARTIALS TAKEN</div>
+          <div id="partialsList" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
+
+        <!-- TRADE STATUS LOG -->
+        <div id="tradeStatusSection" style="display:none;border-top:1px solid var(--border);padding:8px 10px">
+          <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">TRADE STATUS</div>
+          <div id="tradeStatusLog" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto"></div>
+        </div>
+
       </div>
     </div>
 
@@ -307,6 +353,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
       <div class="chat-messages" id="chatMessages">
         <div class="chat-empty">Analysis starts automatically.<br>Ask me anything after.</div>
       </div>
+      <div class="chat-resize-handle" id="chatResizeHandle"></div>
       <div class="chat-input-row">
         <textarea class="chat-input" id="chatInput" rows="2" placeholder="Ask the agent..." onkeydown="chatKeydown(event)"></textarea>
         <button class="chat-send" id="chatSend" onclick="sendChat()" disabled>SEND</button>
@@ -326,11 +373,18 @@ const S={
   charts:{},series:{},
   candles:{M15:[],M5:[],M1:[]},
   ws:{M15:null,M5:null,M1:null},
+  wsPrice:null,         // dedicated price WebSocket
   marketContext:null,
   derivData:null,
   chatHistory:[],
   analysisTick:null,
   derivTick:null,
+  convTick:null,        // conviction update interval
+  lastConvScore:null,   // previous conviction score
+  watchedLevels:[],
+  lastPrice:null,
+  lastPriceChg:null,
+  levelAlertCooldown:{},
 };
 
 // ── DERIVATIVES DATA — funding, OI, liquidations (all free Binance) ───────────
@@ -418,6 +472,31 @@ window.addEventListener('DOMContentLoaded',()=>{
     });
   });
 
+  // chat drag-to-resize
+  const chatHandle=document.getElementById('chatResizeHandle');
+  const chatEl=document.getElementById('chatMessages');
+  let chatStartY=0,chatStartH=0;
+  chatHandle.addEventListener('mousedown',e=>{
+    e.preventDefault();
+    chatStartY=e.clientY;
+    chatStartH=chatEl.offsetHeight;
+    document.body.style.cursor='ns-resize';
+    document.body.style.userSelect='none';
+    const onMove=e=>{
+      const newH=Math.max(100,chatStartH+(e.clientY-chatStartY));
+      chatEl.style.maxHeight=newH+'px';
+      chatEl.style.minHeight=newH+'px';
+    };
+    const onUp=()=>{
+      document.body.style.cursor='';
+      document.body.style.userSelect='';
+      window.removeEventListener('mousemove',onMove);
+      window.removeEventListener('mouseup',onUp);
+    };
+    window.addEventListener('mousemove',onMove);
+    window.addEventListener('mouseup',onUp);
+  });
+
   // start ticker
   loadTickerREST();
   setInterval(loadTickerREST,60000);
@@ -481,6 +560,114 @@ function doLogout(){
 document.getElementById('settingsModal').addEventListener('click',function(e){
   if(e.target===this)closeSettings();
 });
+
+// ── LIVE PRICE WEBSOCKET ──────────────────────────────────────────────────────
+function connectPriceWS(){
+  const pair=document.getElementById('pairSelect').value.toLowerCase();
+  if(S.wsPrice)try{S.wsPrice.close();}catch(e){}
+  const ws=new WebSocket(`wss://stream.binance.com:9443/ws/${pair}@ticker`);
+  ws.onmessage=(e)=>{
+    const d=JSON.parse(e.data);
+    const price=parseFloat(d.c);
+    const chg=parseFloat(d.P);
+    const prev=S.lastPrice;
+    S.lastPrice=price;S.lastPriceChg=chg;
+    updateLivePriceDisplay(price,chg,prev);
+    checkWatchedLevels(price);
+  };
+  ws.onclose=()=>{if(S.running)setTimeout(connectPriceWS,3000);};
+  S.wsPrice=ws;
+}
+
+function updateLivePriceDisplay(price,chg,prev){
+  const sym=document.getElementById('pairSelect').value.replace('USDT','');
+  const valEl=document.getElementById('livePriceVal');
+  const chgEl=document.getElementById('livePriceChg');
+  const symEl=document.getElementById('livePriceSym');
+  if(!valEl)return;
+  symEl.textContent=sym+'/USDT';
+  const dec=price>1000?2:price>1?4:6;
+  valEl.textContent=price.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+  const up=chg>=0;
+  chgEl.textContent=(up?'▲ +':'▼ ')+Math.abs(chg).toFixed(2)+'%';
+  chgEl.className='live-price-chg '+(up?'up':'down');
+  if(prev!==null){
+    const dir=price>=prev?'flash-up':'flash-down';
+    valEl.className='live-price-val '+dir;
+    setTimeout(()=>valEl.className='live-price-val',400);
+  }
+  document.getElementById('livePriceWrap').style.display='';
+}
+
+// ── AUTONOMOUS LEVEL WATCHER ──────────────────────────────────────────────────
+function setWatchedLevels(levels){
+  S.watchedLevels=levels;
+  if(levels.length)log(`Watching ${levels.length} price levels for alerts`,'ok');
+}
+
+function checkWatchedLevels(price){
+  if(!S.watchedLevels.length||!S.running)return;
+  const now=Date.now();
+  S.watchedLevels.forEach(lvl=>{
+    const key=lvl.label+lvl.price;
+    if((now-(S.levelAlertCooldown[key]||0))<120000)return;
+    const tol=lvl.tolerance||lvl.price*0.0008;
+    if(Math.abs(price-lvl.price)<=tol){
+      S.levelAlertCooldown[key]=now;
+      triggerLevelAlert(lvl,price);
+    }
+  });
+}
+
+async function triggerLevelAlert(lvl,price){
+  const antKey=document.getElementById('antKey').value.trim();
+  if(!antKey)return;
+  log(`⚡ Level hit: ${lvl.label} @ ${lvl.price}`,'warn');
+  setAgentStatus('thinking');
+  S.marketContext=buildMarketSummary()||S.marketContext;
+  const msg=`URGENT: Price just hit the ${lvl.label} level at ${lvl.price}. Current price: ${price.toFixed(2)}. This is a key level (${lvl.type}). What happened and what should I do RIGHT NOW? Max 2 sentences.`;
+  S.chatHistory.push({role:'user',content:msg});
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:200,system:buildSystem(),messages:S.chatHistory}),
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    const raw=data.content?.map(b=>b.text||'').join('');
+    const display=raw.replace(/TRADE::(LONG|SHORT|NONE)[^\n]*/g,'').trim();
+    S.chatHistory.push({role:'assistant',content:raw});
+    if(S.chatHistory.length>40)S.chatHistory=S.chatHistory.slice(-40);
+    const trade=parseTrade(raw);
+    if(trade&&trade.dir!=='NONE')updateTradeBox(trade);
+    addMsgToChat(display,'agent');
+    showPopup(`⚡ ${lvl.label} HIT\n${display}`,'alert',12000);
+  }catch(e){log('Level alert error: '+e.message,'err');}
+  setAgentStatus('watching');
+}
+
+function extractLevelsFromText(text){
+  const levels=[];
+  const patterns=[
+    {re:/BSL[:\s@]+([0-9]+\.?[0-9]*)/gi,type:'BSL',label:'BSL'},
+    {re:/SSL[:\s@]+([0-9]+\.?[0-9]*)/gi,type:'SSL',label:'SSL'},
+    {re:/sweep[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'SWEEP',label:'Sweep Target'},
+    {re:/FVG[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'FVG',label:'FVG'},
+    {re:/OB[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'OB',label:'OB'},
+    {re:/target[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'TP',label:'Target'},
+    {re:/watching[^.\n]*?([0-9]{4,}\.?[0-9]*)/gi,type:'WATCH',label:'Watch Level'},
+  ];
+  patterns.forEach(({re,type,label})=>{
+    let m;while((m=re.exec(text))!==null){
+      const p=parseFloat(m[1]);
+      if(p>0)levels.push({price:p,type,label:`${label} ${p}`,tolerance:p*0.001});
+    }
+  });
+  const seen=new Set();
+  return levels.filter(l=>{const k=l.price.toFixed(0);if(seen.has(k))return false;seen.add(k);return true;}).slice(0,12);
+}
+
 async function loadTickerREST(){
   try{
     const r=await fetch('https://api.binance.com/api/v3/ticker/24hr?symbols=['+TICKER_PAIRS.map(p=>`"${p.toUpperCase()}"`).join(',')+']');
@@ -850,6 +1037,8 @@ TRADE::SHORT|ENTRY_PRICE|SL_PRICE|TP_PRICE
 TRADE::NONE
 Use exact prices from the market data. Never explain this tag.
 
+BREAKEVEN: If price has moved enough in the trade direction and you recommend moving SL to entry, say "move to breakeven" or "set breakeven" in your message. The system will automatically update the trade box.
+
 Speak conversationally and directly. Max 3 sentences unless asked for more detail. No bullet points. Be decisive — the trader needs a clear answer, not hedging.`;
 }
 
@@ -859,7 +1048,7 @@ function showPopup(text,type='analysis',duration=7000){
   const isBear=text.toLowerCase().includes('short')||text.toLowerCase().includes('bearish');
   const popup=document.createElement('div');
   popup.className=`popup type-${type}${type==='trade'&&isBear?' bear':''}`;
-  const labels={analysis:'📊 ANALYSIS',trade:'🎯 TRADE',update:'🔄 UPDATE'};
+  const labels={analysis:'📊 ANALYSIS',trade:'🎯 TRADE',update:'🔄 UPDATE',alert:'⚡ ALERT'};
   const tagCls=type==='trade'&&isBear?'trade bear':type;
   const now=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   popup.innerHTML=`<div class="popup-header"><span class="popup-tag ${tagCls}">${labels[type]||type.toUpperCase()}</span><span class="popup-close">✕</span></div><div class="popup-body">${text}</div><div class="popup-time">${now} EST</div>`;
@@ -935,6 +1124,11 @@ async function runAnalysis(isAuto=false){
       addMsgToChat(display,'agent');
       showPopup(display,hasTrade?'trade':(isFirst?'analysis':'update'));
     }
+    // extract and watch key levels from the analysis
+    const newLevels=extractLevelsFromText(raw);
+    if(newLevels.length)setWatchedLevels(newLevels);
+    // detect breakeven instruction in analysis
+    detectTradeEvents(raw);
     document.getElementById('chatSend').disabled=false;
     document.getElementById('reAnalyzeBtn').style.display='';
     setAgentStatus('watching');
@@ -969,6 +1163,10 @@ async function sendChat(){
     if(S.chatHistory.length>40)S.chatHistory=S.chatHistory.slice(-40);
     const trade=parseTrade(raw);
     if(trade&&trade.dir!=='NONE'){updateTradeBox(trade);showPopup(display,'trade');}
+    // detect breakeven instruction
+    detectTradeEvents(raw);
+    const chatLevels=extractLevelsFromText(raw);
+    if(chatLevels.length)setWatchedLevels([...S.watchedLevels,...chatLevels].slice(0,15));
     thinking.className='msg agent';thinking.textContent=display;
   }catch(e){thinking.className='msg agent';thinking.textContent='Error: '+e.message;}
   document.getElementById('chatSend').disabled=false;
@@ -982,10 +1180,236 @@ function parseTrade(text){
   return{dir:m[1],entry:m[2],sl:m[3],tp:m[4]};
 }
 
+// ── TRADE LINES ON CHART ──────────────────────────────────────────────────────
+const tradeLinesSeries=[];
+let activeTrade=null;
+let tradeCheckInterval=null;
+
+function clearTradeLines(){
+  tradeLinesSeries.forEach(s=>{
+    try{
+      // remove from all charts
+      ['M15','M5','M1'].forEach(k=>{
+        try{S.charts[k]?.removeSeries(s);}catch(e){}
+      });
+    }catch(e){}
+  });
+  tradeLinesSeries.length=0;
+}
+
+function drawTradeLines(trade){
+  clearTradeLines();
+  if(!trade||trade.dir==='NONE')return;
+  const isBull=trade.dir==='LONG';
+  const entry=parseFloat(trade.entry);
+  const sl=parseFloat(trade.sl);
+  const tp=parseFloat(trade.tp);
+  if(!entry||!sl||!tp)return;
+
+  // draw on 1M and 5M charts (most relevant for scalp execution)
+  ['M1','M5'].forEach(k=>{
+    const chart=S.charts[k];
+    const candles=S.candles[k];
+    if(!chart||!candles.length)return;
+    const start=candles[Math.max(0,candles.length-5)].time;
+    const end=candles[candles.length-1].time+3600; // extend 1h into future
+
+    // ENTRY line — white dashed
+    const entrySeries=chart.addLineSeries({
+      color:'rgba(255,255,255,0.85)',
+      lineWidth:2,
+      lineStyle:0,
+      priceLineVisible:false,
+      lastValueVisible:true,
+      crosshairMarkerVisible:false,
+      title:'ENTRY',
+    });
+    entrySeries.setData([{time:start,value:entry},{time:end,value:entry}]);
+    tradeLinesSeries.push(entrySeries);
+
+    // SL line — red solid
+    const slSeries=chart.addLineSeries({
+      color:'rgba(255,61,87,0.9)',
+      lineWidth:2,
+      lineStyle:0,
+      priceLineVisible:false,
+      lastValueVisible:true,
+      crosshairMarkerVisible:false,
+      title:'SL',
+    });
+    slSeries.setData([{time:start,value:sl},{time:end,value:sl}]);
+    tradeLinesSeries.push(slSeries);
+
+    // TP line — green solid
+    const tpSeries=chart.addLineSeries({
+      color:'rgba(0,230,118,0.9)',
+      lineWidth:2,
+      lineStyle:0,
+      priceLineVisible:false,
+      lastValueVisible:true,
+      crosshairMarkerVisible:false,
+      title:'TP',
+    });
+    tpSeries.setData([{time:start,value:tp},{time:end,value:tp}]);
+    tradeLinesSeries.push(tpSeries);
+
+    // filled zone between entry and TP (semi-transparent)
+    const zoneSeries=chart.addLineSeries({
+      color:isBull?'rgba(0,230,118,0.06)':'rgba(255,61,87,0.06)',
+      lineWidth:1,
+      lineStyle:2,
+      priceLineVisible:false,
+      lastValueVisible:false,
+      crosshairMarkerVisible:false,
+    });
+    // draw midpoint to create visual band
+    const mid=(entry+tp)/2;
+    zoneSeries.setData([{time:start,value:mid},{time:end,value:mid}]);
+    tradeLinesSeries.push(zoneSeries);
+  });
+
+  // watch for SL/TP hit
+  clearInterval(tradeCheckInterval);
+  tradeCheckInterval=setInterval(()=>{
+    const price=S.lastPrice;
+    if(!price)return;
+    if(isBull){
+      if(price<=sl){
+        onTradeClose('STOP LOSS HIT',sl,false);
+      } else if(price>=tp){
+        onTradeClose('TAKE PROFIT HIT ✓',tp,true);
+      }
+    } else {
+      if(price>=sl){
+        onTradeClose('STOP LOSS HIT',sl,false);
+      } else if(price<=tp){
+        onTradeClose('TAKE PROFIT HIT ✓',tp,true);
+      }
+    }
+  },500);
+}
+
+function onTradeClose(reason,hitPrice,isWin){
+  clearInterval(tradeCheckInterval);
+  clearTradeLines();
+  activeTrade=null;
+  // reset trade box
+  document.getElementById('tradeBox').className='trade-box';
+  document.getElementById('dirBadge').style.display='none';
+  document.getElementById('tradeLabel').textContent='TRADE CLOSED';
+  document.getElementById('tradeLabel').style.color='var(--muted)';
+  resetTradeExtras();
+  document.getElementById('tradeEntry').textContent='—';
+  document.getElementById('tradeSL').textContent='—';
+  document.getElementById('tradeTP').textContent='—';
+  document.getElementById('rrVal').textContent='—';
+  // notify
+  const msg=`${reason} @ ${hitPrice}`;
+  showPopup(msg,isWin?'trade':'alert',8000);
+  addMsgToChat(`Trade closed — ${msg}`,'agent');
+  log(msg,isWin?'ok':'warn');
+}
+
+function setBreakeven(){
+  if(!activeTrade)return;
+  const entry=activeTrade.entry;
+  document.getElementById('slLabel').textContent='BREAKEVEN';
+  document.getElementById('tradeSL').textContent=entry;
+  document.getElementById('tradeSL').style.color='var(--gold)';
+  document.getElementById('rrVal').textContent='🔒 SECURED';
+  if(activeTrade)activeTrade.sl=entry;
+  addTradeStatus('🔒 SL moved to Breakeven @ '+entry,'gold');
+  log('Breakeven set at '+entry,'ok');
+  showPopup('🔒 SL moved to Breakeven @ '+entry,'update',6000);
+}
+
+function addPartial(price,note){
+  document.getElementById('partialsSection').style.display='';
+  const list=document.getElementById('partialsList');
+  const item=document.createElement('div');
+  item.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.2);border-radius:2px';
+  const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  item.innerHTML=`<span style="font-size:.6rem;color:var(--bull);font-family:var(--mono);font-weight:700">✓ ${price||'partial'}</span><span style="font-size:.5rem;color:var(--muted)">${note||''} · ${t}</span>`;
+  list.appendChild(item);
+}
+
+function addTradeStatus(msg,color){
+  document.getElementById('tradeStatusSection').style.display='';
+  const logEl=document.getElementById('tradeStatusLog');
+  const item=document.createElement('div');
+  const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  item.style.cssText='font-size:.58rem;color:var(--'+( color||'muted')+');font-family:var(--mono);padding:3px 0;border-bottom:1px solid var(--border)';
+  item.textContent=t+' — '+msg;
+  logEl.insertBefore(item,logEl.firstChild);
+}
+
+function resetTradeExtras(){
+  document.getElementById('partialsSection').style.display='none';
+  document.getElementById('partialsList').innerHTML='';
+  document.getElementById('tradeStatusSection').style.display='none';
+  document.getElementById('tradeStatusLog').innerHTML='';
+  document.getElementById('slLabel').textContent='STOP LOSS';
+  document.getElementById('tradeSL').style.color='';
+}
+
+function detectTradeEvents(text){
+  if(!activeTrade)return;
+  // BREAKEVEN
+  if(/breakeven|break.?even|move.*sl.*entry|sl.*to.*entry|secure.*position/i.test(text)){
+    setBreakeven();
+  }
+  // PARTIAL
+  const pm=text.match(/partial[^.]*?([0-9]{4,}\.?[0-9]*)|scale.?out[^.]*?([0-9]{4,}\.?[0-9]*)|close.*half[^.]*?([0-9]{4,}\.?[0-9]*)/i);
+  if(pm||/partial|scale out|close half|take some off|reduce position/i.test(text)){
+    const price=pm?.(pm[1]||pm[2]||pm[3])||S.lastPrice?.toFixed(2)||'market';
+    const note=/scale.?out/i.test(text)?'Scale out':/close half/i.test(text)?'50% close':/reduce/i.test(text)?'Reduce':'Partial';
+    addPartial(price,note);
+    addTradeStatus(note+' taken @ '+price,'bull');
+    showPopup('✂ '+note+' @ '+price,'update',6000);
+  }
+  // SL UPDATE
+  const slm=text.match(/move.*sl.*?to.*?([0-9]{4,}\.?[0-9]*)|tighten.*sl.*?([0-9]{4,}\.?[0-9]*)/i);
+  if(slm&&!/entry|breakeven|break.?even/i.test(text)){
+    const v=slm[1]||slm[2];
+    if(v){
+      document.getElementById('slLabel').textContent='STOP LOSS';
+      document.getElementById('tradeSL').textContent=v;
+      document.getElementById('tradeSL').style.color='';
+      if(activeTrade)activeTrade.sl=v;
+      addTradeStatus('SL updated to '+v,'warn');
+    }
+  }
+  // TP UPDATE
+  const tpm=text.match(/move.*tp.*?([0-9]{4,}\.?[0-9]*)|tp.*to.*?([0-9]{4,}\.?[0-9]*)/i);
+  if(tpm){
+    const v=tpm[1]||tpm[2];
+    if(v){
+      document.getElementById('tradeTP').textContent=v;
+      if(activeTrade)activeTrade.tp=v;
+      addTradeStatus('TP updated to '+v,'accent');
+    }
+  }
+  // CLOSE
+  if(/close.*trade|exit.*now|get out|close.*position|exit.*trade/i.test(text)&&!/stop loss/i.test(text)){
+    addTradeStatus('Agent: CLOSE TRADE','bear');
+    showPopup('⚠ Agent says: Close the trade now','alert',10000);
+  }
+  // HOLD
+  if(/hold|stay in|let it run|keep holding/i.test(text)){
+    addTradeStatus('Hold — let it run','muted');
+  }
+}
+
 function updateTradeBox(t){
   if(!t||t.dir==='NONE')return;
   const isBull=t.dir==='LONG';
+  clearTradeLines();
+  clearInterval(tradeCheckInterval);
+  activeTrade=t;
+
   document.getElementById('tradeBox').className=`trade-box ${isBull?'bull':'bear'}`;
+
+  // direction badge — LONG or SHORT
   const badge=document.getElementById('dirBadge');
   badge.style.display='';
   badge.textContent=t.dir;
@@ -993,16 +1417,117 @@ function updateTradeBox(t){
   badge.style.color=isBull?'#00e676':'#ff3d57';
   badge.style.border=`1px solid ${isBull?'rgba(0,230,118,.4)':'rgba(255,61,87,.4)'}`;
   badge.style.boxShadow=`0 0 8px ${isBull?'rgba(0,230,118,.3)':'rgba(255,61,87,.3)'}`;
-  document.getElementById('tradeLabel').textContent='SETUP';
+  badge.style.fontSize='clamp(.6rem,.8vw,.9rem)';
+  badge.style.letterSpacing='.15em';
+  badge.style.fontWeight='700';
+
+  // trade label shows direction text too
+  document.getElementById('tradeLabel').textContent=isBull?'LONG TRADE':'SHORT TRADE';
+  document.getElementById('tradeLabel').style.color=isBull?'var(--bull)':'var(--bear)';
+  resetTradeExtras();
+  addTradeStatus('New '+(isBull?'LONG':'SHORT')+' trade opened @ '+(t.entry||'?'),'accent');
+
   document.getElementById('tradeEntry').textContent=t.entry||'—';
   document.getElementById('tradeSL').textContent=t.sl||'—';
   document.getElementById('tradeTP').textContent=t.tp||'—';
   const e=parseFloat(t.entry),s=parseFloat(t.sl),tp=parseFloat(t.tp);
   document.getElementById('rrVal').textContent=(e&&s&&tp)?'1 : '+((Math.abs(tp-e)/Math.abs(e-s)).toFixed(2)):'—';
   document.getElementById('tradeTime').textContent=' · '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+
+  drawTradeLines(t);
 }
 
-// ── LOG ───────────────────────────────────────────────────────────────────────
+// ── CONVICTION MONITOR — updates every 30s, alerts on change ─────────────────
+async function updateConviction(){
+  if(!S.running||!S.candles.M15.length)return;
+  const m15=buildCtx('M15'),m5=buildCtx('M5'),m1=buildCtx('M1');
+  if(!m15||!m5||!m1)return;
+
+  const cv=calcConviction(m15,m5,m1);
+  const colors={HIGH:'#00e676',MEDIUM:'#f0b429',LOW:'#ff3d57'};
+  const colorKey=cv.label.includes('HIGH')?'HIGH':cv.label.includes('MEDIUM')?'MEDIUM':'LOW';
+  const color=colors[colorKey];
+
+  // update UI
+  document.getElementById('convScore').textContent=cv.score+'/'+cv.max+' '+cv.label;
+  document.getElementById('convScore').style.color=color;
+  document.getElementById('convReasons').textContent=cv.reasons.join(' · ')||'No factors yet';
+  document.getElementById('convPanel').style.display='';
+  document.getElementById('convTime').textContent=' · '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+
+  // progress bar
+  const bar=document.getElementById('convBar');
+  bar.style.width=((cv.score/cv.max)*100)+'%';
+  bar.style.background=color;
+
+  // delta indicator
+  const prev=S.lastConvScore;
+  const deltaEl=document.getElementById('convDelta');
+  if(prev!==null&&prev!==cv.score){
+    const d=cv.score-prev;
+    deltaEl.textContent=(d>0?'▲ +':'▼ ')+d+' from last';
+    deltaEl.style.color=d>0?'#00e676':'#ff3d57';
+  } else {
+    deltaEl.textContent='';
+  }
+
+  // detect score change and alert agent
+  const prev=S.lastConvScore;
+  S.lastConvScore=cv.score;
+  if(prev===null){return;} // first run, no comparison yet
+
+  const delta=cv.score-prev;
+  if(delta===0)return; // no change, stay silent
+
+  // conviction changed — ask agent to comment
+  const antKey=document.getElementById('antKey').value.trim();
+  if(!antKey)return;
+
+  const direction=delta>0?'IMPROVED':'DROPPED';
+  const urgency=delta<=-2?'URGENT DEGRADATION':delta>=2?'STRONG IMPROVEMENT':'CHANGE';
+  const tradeCtx=activeTrade?`There is an active ${activeTrade.dir} trade with entry at ${activeTrade.entry}, SL at ${activeTrade.sl}, TP at ${activeTrade.tp}.`:'No active trade position.';
+
+  setAgentStatus('thinking');
+  S.marketContext=buildMarketSummary()||S.marketContext;
+
+  const msg=`Conviction score just ${direction} from ${prev}/${cv.max} to ${cv.score}/${cv.max} (${urgency}). New factors: ${cv.reasons.join(', ')||'none'}. ${tradeCtx} What changed in price action and what should I do? Max 2 sentences, be direct.`;
+  S.chatHistory.push({role:'user',content:msg});
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:180,system:buildSystem(),messages:S.chatHistory}),
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    const raw=data.content?.map(b=>b.text||'').join('');
+    const display=raw.replace(/TRADE::(LONG|SHORT|NONE)[^\n]*/g,'').trim();
+    S.chatHistory.push({role:'assistant',content:raw});
+    if(S.chatHistory.length>40)S.chatHistory=S.chatHistory.slice(-40);
+
+    // update trade if agent sends new levels
+    const trade=parseTrade(raw);
+    if(trade&&trade.dir!=='NONE')updateTradeBox(trade);
+
+    addMsgToChat(display,'agent');
+
+    // popup with conviction change info
+    const popupType=delta<=-2?'alert':'update';
+    const icon=delta>0?'📈':'📉';
+    showPopup(`${icon} Conviction ${direction}: ${prev}→${cv.score}/7\n${display}`,popupType,9000);
+    log(`Conviction ${direction}: ${prev}→${cv.score}/7`,'warn');
+  }catch(e){log('Conviction update error: '+e.message,'err');}
+  setAgentStatus('watching');
+}
+
+function startConvictionMonitor(){
+  clearInterval(S.convTick);
+  S.lastConvScore=null;
+  // run immediately once after 5s, then every 30s
+  setTimeout(updateConviction,5000);
+  S.convTick=setInterval(updateConviction,30000);
+}
 function log(msg,type=''){
   const el=document.getElementById('log'),d=document.createElement('div');
   d.innerHTML=type?`<span class="${type}">[${type}]</span> ${msg}`:msg;
@@ -1040,6 +1565,7 @@ async function startSession(){
 
   log('Connecting live WebSocket streams…');
   connectAllWS();
+  connectPriceWS(); // dedicated price ticker WS
 
   setAgentStatus('watching');
   document.getElementById('chatSend').disabled=false;
@@ -1051,13 +1577,22 @@ async function startSession(){
   S.analysisTick=setInterval(()=>{
     if(S.running)runAnalysis(true);
   },120000);
+
+  // conviction monitor every 30s
+  startConvictionMonitor();
 }
 
 function stopSession(){
   S.running=false;
   clearInterval(S.analysisTick);
   clearInterval(S.derivTick);
+  clearInterval(S.convTick);
+  clearInterval(tradeCheckInterval);
+  clearTradeLines();
   closeAllWS();
+  if(S.wsPrice)try{S.wsPrice.close();}catch(e){}
+  S.watchedLevels=[];
+  document.getElementById('livePriceWrap').style.display='none';
   document.getElementById('stopBtn').style.display='none';
   document.getElementById('liveDot').className='dot off';
   document.getElementById('liveLabel').textContent='OFFLINE';
