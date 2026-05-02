@@ -510,10 +510,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     });
   });
 
-  // auto-start everything after layout renders
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    startSession();
-  }));
+  // auto-start after full page render — use setTimeout to ensure layout is complete
+  setTimeout(()=>startSession(),300);
 });
 
 // ── SETTINGS MODAL ────────────────────────────────────────────────────────────
@@ -736,17 +734,20 @@ function initCharts(){
     el.innerHTML='';
     const h=getH(k);
     el.style.height=h+'px';
-    const chart=LightweightCharts.createChart(el,{...theme,autoSize:true,height:h});
+    const w=Math.max(300,el.getBoundingClientRect().width||el.offsetWidth||800);
+    const chart=LightweightCharts.createChart(el,{...theme,width:w,height:h});
     const series=chart.addCandlestickSeries({
       upColor:'#00e676',downColor:'#ff3d57',
       borderUpColor:'#00e676',borderDownColor:'#ff3d57',
       wickUpColor:'#00e676',wickDownColor:'#ff3d57',
     });
     S.charts[k]=chart;S.series[k]=series;
-    new ResizeObserver(()=>{
-      const nh=getH(k);
-      el.style.height=nh+'px';
-      chart.applyOptions({height:nh});
+    new ResizeObserver(entries=>{
+      for(const entry of entries){
+        const nw=Math.floor(entry.contentRect.width);
+        const nh=getH(k);
+        if(nw>0){el.style.height=nh+'px';chart.resize(nw,nh);}
+      }
     }).observe(el);
   });
 
@@ -1536,12 +1537,12 @@ function log(msg,type=''){
 
 // ── SESSION ───────────────────────────────────────────────────────────────────
 async function startSession(){
+  if(S.running)return; // prevent double start
   const antKey=document.getElementById('antKey').value.trim();
   if(!antKey){
-    // no key saved — open settings so user can add it
     openSettings();
     showSaveStatus('⚠ Paste your Anthropic key here to get started','#f0b429');
-    log('No API key found — open Settings to add your key','warn');
+    log('No API key — open Settings ⚙ to add your key','warn');
     return;
   }
 
@@ -1550,36 +1551,41 @@ async function startSession(){
   document.getElementById('liveDot').className='dot live';
   document.getElementById('liveLabel').textContent='LIVE';
   document.getElementById('liveTag').style.display='';
+  log('Initializing…');
 
-  // wait for layout
-  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-  initCharts();
-  await new Promise(r=>setTimeout(r,80));
+  try{
+    // ensure full layout render before measuring chart dimensions
+    await new Promise(r=>setTimeout(r,150));
+    initCharts();
+    await new Promise(r=>setTimeout(r,100));
 
-  log('Loading candles from Binance…');
-  await loadAllCandles();
+    log('Loading candles from Binance…');
+    await loadAllCandles();
 
-  log('Fetching funding rates & open interest…');
-  await fetchDerivData();
-  S.derivTick=setInterval(fetchDerivData,60000);
+    log('Fetching derivatives data…');
+    await fetchDerivData();
+    S.derivTick=setInterval(fetchDerivData,60000);
 
-  log('Connecting live WebSocket streams…');
-  connectAllWS();
-  connectPriceWS(); // dedicated price ticker WS
+    log('Connecting WebSocket streams…');
+    connectAllWS();
+    connectPriceWS();
 
-  setAgentStatus('watching');
-  document.getElementById('chatSend').disabled=false;
+    setAgentStatus('watching');
+    document.getElementById('chatSend').disabled=false;
 
-  log('Starting analysis…','ok');
-  await runAnalysis(false);
+    log('Running first analysis…','ok');
+    await runAnalysis(false);
 
-  clearInterval(S.analysisTick);
-  S.analysisTick=setInterval(()=>{
-    if(S.running)runAnalysis(true);
-  },120000);
+    clearInterval(S.analysisTick);
+    S.analysisTick=setInterval(()=>{if(S.running)runAnalysis(true);},120000);
+    startConvictionMonitor();
 
-  // conviction monitor every 30s
-  startConvictionMonitor();
+  }catch(e){
+    log('Startup error: '+e.message,'err');
+    S.running=false;
+    document.getElementById('liveDot').className='dot off';
+    document.getElementById('liveLabel').textContent='ERROR';
+  }
 }
 
 function stopSession(){
