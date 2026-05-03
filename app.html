@@ -15,7 +15,7 @@
   --bull:#2a2a2a;--bear:#7a7a78;--gold:#a89968;--purple:#6b6b6b;
   --mono:'Space Mono',monospace;--display:'Syne',sans-serif;
 }
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:clamp(11px,.9vw,15px);overflow-x:hidden}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:clamp(11px,.9vw,15px);overflow:hidden}
 body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(168,153,104,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(168,153,104,.02) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
 .wrap{position:relative;z-index:1;width:100%;padding:0 clamp(10px,1.2vw,20px) 16px}
 
@@ -82,7 +82,11 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .resize-handle:hover::after{background:var(--accent)}
 
 /* RIGHT PANEL */
-.apanel{display:flex;flex-direction:column;gap:8px;position:sticky;top:8px;max-height:calc(100vh - 100px);overflow-y:auto}
+.apanel{display:flex;flex-direction:column;gap:8px;position:sticky;top:8px;max-height:calc(100vh - 140px);overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--border) transparent;padding-right:4px}
+.apanel::-webkit-scrollbar{width:6px}
+.apanel::-webkit-scrollbar-track{background:transparent}
+.apanel::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.apanel::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 .apanel::-webkit-scrollbar{width:3px}
 .apanel::-webkit-scrollbar-thumb{background:var(--border)}
 .panel{background:var(--s1);border:1px solid var(--border);border-radius:3px;overflow:hidden;flex-shrink:0}
@@ -344,6 +348,84 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
   </div>
 
   <div class="apanel">
+    <!-- 1. AGENT (CHAT) -->
+    <div class="panel">
+      <div class="phdr">
+        <div class="agent-status"><div class="agent-dot" id="agentDot"></div><span id="agentStatus">OFFLINE</span></div>
+        <button class="btn" id="reAnalyzeBtn" onclick="runAnalysis(false)" style="display:none;font-size:.44rem;padding:3px 8px">⟳ RE-ANALYZE</button>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-empty">Analysis starts automatically.<br>Ask me anything after.</div>
+      </div>
+      <div class="chat-resize-handle" id="chatResizeHandle"></div>
+      <div class="chat-input-row">
+        <textarea class="chat-input" id="chatInput" rows="2" placeholder="Ask the agent..." onkeydown="chatKeydown(event)"></textarea>
+        <button class="chat-send" id="chatSend" onclick="sendChat()" disabled>SEND</button>
+      </div>
+    </div>
+
+    <!-- 2. TRADE BOX -->
+    <div class="panel">
+      <div class="phdr">TRADE LEVELS<span id="tradeTime" style="font-size:.44rem"></span></div>
+      <div class="trade-box" id="tradeBox">
+        <div class="trade-box-hdr">
+          <span class="dir-badge" id="dirBadge"></span>
+          <span id="tradeLabel">NO SETUP YET</span>
+          <button id="manualCloseBtn" onclick="manualCloseTrade()" style="display:none;margin-left:auto;background:rgba(122,122,120,.12);border:1px solid rgba(122,122,120,.4);color:var(--bear);font-family:var(--mono);font-size:.5rem;letter-spacing:.1em;padding:3px 8px;border-radius:2px;cursor:pointer;font-weight:700">✕ CLOSE</button>
+        </div>
+        <div class="trade-grid">
+          <div class="trade-cell"><div class="trade-cell-lbl">ENTRY</div><div class="trade-cell-val entry" id="tradeEntry">—</div></div>
+          <div class="trade-cell"><div class="trade-cell-lbl" id="slLabel">STOP LOSS</div><div class="trade-cell-val sl" id="tradeSL">—</div></div>
+          <div class="trade-cell"><div class="trade-cell-lbl">TAKE PROFIT</div><div class="trade-cell-val tp" id="tradeTP">—</div></div>
+        </div>
+        <div class="rr-row"><span class="rr-lbl">RISK / REWARD</span><span class="rr-val" id="rrVal">—</span></div>
+
+        <!-- TRADE CONVICTION -->
+        <div id="tradeConvSection" style="display:none;border-top:1px solid var(--border);padding:10px 12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted)">TRADE HEALTH</div>
+            <div style="font-size:.46rem;color:var(--muted)" id="tradeConvTime"></div>
+          </div>
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
+            <div id="tradeConvBar" style="height:100%;width:0%;border-radius:3px;transition:width .6s ease,background .6s ease"></div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-family:var(--display);font-weight:700;font-size:1.1rem" id="tradeConvScore">—</div>
+            <div style="font-size:.58rem;font-family:var(--mono)" id="tradeConvDelta"></div>
+          </div>
+          <div style="font-size:.56rem;color:var(--muted);line-height:1.6" id="tradeConvReasons"></div>
+        </div>
+
+        <!-- PARTIALS -->
+        <div id="partialsSection" style="display:none;border-top:1px solid var(--border);padding:8px 10px">
+          <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">PARTIALS TAKEN</div>
+          <div id="partialsList" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
+
+        <!-- TRADE STATUS LOG -->
+        <div id="tradeStatusSection" style="display:none;border-top:1px solid var(--border);padding:8px 10px">
+          <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">TRADE STATUS</div>
+          <div id="tradeStatusLog" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 3. CONVICTION SCORE -->
+    <div class="panel" id="convPanel" style="display:none">
+      <div class="phdr">CONVICTION SCORE<span id="convTime" style="font-size:.44rem"></span></div>
+      <div style="padding:10px 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-family:var(--display);font-weight:700;font-size:1.5rem" id="convScore">—</div>
+          <div id="convDelta" style="font-size:.6rem;font-family:var(--mono)"></div>
+        </div>
+        <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:8px">
+          <div id="convBar" style="height:100%;width:0%;border-radius:2px;transition:width .5s ease,background .5s ease"></div>
+        </div>
+        <div style="font-size:clamp(.44rem,.52vw,.58rem);color:var(--muted);line-height:1.7" id="convReasons"></div>
+      </div>
+    </div>
+
     <!-- HTF BIAS -->
     <div class="panel" id="htfPanel" style="display:none">
       <div class="phdr">HTF BIAS<span id="htfTime" style="font-size:.44rem"></span></div>
@@ -353,22 +435,6 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
           <span style="font-size:.46rem;letter-spacing:.1em;color:var(--muted)">CONFLUENCE</span>
           <span id="htfConfluence" style="font-family:var(--display);font-weight:700;font-size:.85rem">—</span>
         </div>
-      </div>
-    </div>
-
-    <!-- CONVICTION SCORE -->
-    <div class="panel" id="convPanel" style="display:none">
-      <div class="phdr">CONVICTION SCORE<span id="convTime" style="font-size:.44rem"></span></div>
-      <div style="padding:10px 12px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div style="font-family:var(--display);font-weight:700;font-size:1.5rem" id="convScore">—</div>
-          <div id="convDelta" style="font-size:.6rem;font-family:var(--mono)"></div>
-        </div>
-        <!-- progress bar -->
-        <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:8px">
-          <div id="convBar" style="height:100%;width:0%;border-radius:2px;transition:width .5s ease,background .5s ease"></div>
-        </div>
-        <div style="font-size:clamp(.44rem,.52vw,.58rem);color:var(--muted);line-height:1.7" id="convReasons"></div>
       </div>
     </div>
 
@@ -402,69 +468,6 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
       </div>
     </div>
 
-    <!-- TRADE BOX -->
-    <div class="panel">
-      <div class="phdr">TRADE LEVELS<span id="tradeTime" style="font-size:.44rem"></span></div>
-      <div class="trade-box" id="tradeBox">
-        <div class="trade-box-hdr">
-          <span class="dir-badge" id="dirBadge"></span>
-          <span id="tradeLabel">NO SETUP YET</span>
-          <button id="manualCloseBtn" onclick="manualCloseTrade()" style="display:none;margin-left:auto;background:rgba(122,122,120,.12);border:1px solid rgba(122,122,120,.4);color:var(--bear);font-family:var(--mono);font-size:.5rem;letter-spacing:.1em;padding:3px 8px;border-radius:2px;cursor:pointer;font-weight:700">✕ CLOSE</button>
-        </div>
-        <div class="trade-grid">
-          <div class="trade-cell"><div class="trade-cell-lbl">ENTRY</div><div class="trade-cell-val entry" id="tradeEntry">—</div></div>
-          <div class="trade-cell"><div class="trade-cell-lbl" id="slLabel">STOP LOSS</div><div class="trade-cell-val sl" id="tradeSL">—</div></div>
-          <div class="trade-cell"><div class="trade-cell-lbl">TAKE PROFIT</div><div class="trade-cell-val tp" id="tradeTP">—</div></div>
-        </div>
-        <div class="rr-row"><span class="rr-lbl">RISK / REWARD</span><span class="rr-val" id="rrVal">—</span></div>
-
-        <!-- TRADE CONVICTION -->
-        <div id="tradeConvSection" style="display:none;border-top:1px solid var(--border);padding:10px 12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted)">TRADE HEALTH</div>
-            <div style="font-size:.46rem;color:var(--muted)" id="tradeConvTime"></div>
-          </div>
-          <!-- health bar -->
-          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
-            <div id="tradeConvBar" style="height:100%;width:0%;border-radius:3px;transition:width .6s ease,background .6s ease"></div>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div style="font-family:var(--display);font-weight:700;font-size:1.1rem" id="tradeConvScore">—</div>
-            <div style="font-size:.58rem;font-family:var(--mono)" id="tradeConvDelta"></div>
-          </div>
-          <div style="font-size:.56rem;color:var(--muted);line-height:1.6" id="tradeConvReasons"></div>
-        </div>
-
-        <!-- PARTIALS -->
-        <div id="partialsSection" style="display:none;border-top:1px solid var(--border);padding:8px 10px">
-          <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">PARTIALS TAKEN</div>
-          <div id="partialsList" style="display:flex;flex-direction:column;gap:4px"></div>
-        </div>
-
-        <!-- TRADE STATUS LOG -->
-        <div id="tradeStatusSection" style="display:none;border-top:1px solid var(--border);padding:8px 10px">
-          <div style="font-size:.44rem;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">TRADE STATUS</div>
-          <div id="tradeStatusLog" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto"></div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- AGENT -->
-    <div class="panel">
-      <div class="phdr">
-        <div class="agent-status"><div class="agent-dot" id="agentDot"></div><span id="agentStatus">OFFLINE</span></div>
-        <button class="btn" id="reAnalyzeBtn" onclick="runAnalysis(false)" style="display:none;font-size:.44rem;padding:3px 8px">⟳ RE-ANALYZE</button>
-      </div>
-      <div class="chat-messages" id="chatMessages">
-        <div class="chat-empty">Analysis starts automatically.<br>Ask me anything after.</div>
-      </div>
-      <div class="chat-resize-handle" id="chatResizeHandle"></div>
-      <div class="chat-input-row">
-        <textarea class="chat-input" id="chatInput" rows="2" placeholder="Ask the agent..." onkeydown="chatKeydown(event)"></textarea>
-        <button class="chat-send" id="chatSend" onclick="sendChat()" disabled>SEND</button>
-      </div>
-    </div>
   </div>
 </div>
 </div>
@@ -793,10 +796,9 @@ async function scanOtherPairs(){
       if(ob.length>=2)score++;
       if(score>=4){
         const last=scannerLastAlert[pair]||0;
-        if(Date.now()-last>900000){ // 15 min cooldown per pair
+        if(Date.now()-last>900000){
           scannerLastAlert[pair]=Date.now();
-          showPopup(`👀 ${pair.replace('USDT','')} setup ${score}/4 — ${pd.pos}`,'update',5000);
-          log(`Scanner: ${pair} score ${score}/4`,'ok');
+          // silent — only log, no popup (user trades BTC only)
         }
       }
       await new Promise(r=>setTimeout(r,300));
@@ -1519,7 +1521,7 @@ function restoreSession(){
     activeTrade=data.activeTrade;
     setTimeout(()=>{
       try{
-        updateTradeBox(activeTrade);
+        updateTradeBox(activeTrade,true); // silent — no Telegram, no speech, no screenshot
         drawTradeLines(activeTrade);
         log(`Restored ${activeTrade.dir} trade @ ${activeTrade.entry}`,'ok');
       }catch(e){console.warn('restore trade error',e);}
@@ -2526,7 +2528,7 @@ function detectLiquiditySweeps(k,fresh){
     S.chatHistory=S.chatHistory||[];
     S.chatHistory.push({
       role:'user',
-      content:`[SYSTEM] BSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMaxHigh.toFixed(2)}). Watch for displacement + FVG creation immediately after — that FVG is a HIGH-PROBABILITY SHORT entry zone (A+ setup). If HTF bias agrees, prioritize this trade.`
+      content:`[SYSTEM] BSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMaxHigh.toFixed(2)}). Now WAIT for 1M BOS down → 1M displacement → 1M FVG. Only enter when price retraces into that 1M FVG. NO 1M BOS = NO TRADE. SL beyond swept level. A+ setup if all conditions align with HTF SHORT bias.`
     });
     showPopup(`💧 ${tfLabel} BSL ${o.price} swept`,'update',6000);
     sendTelegram(`💧 <b>BSL SWEPT</b>\n\n${tfLabel} BSL at ${o.price}\nPrice reached ${recentMaxHigh.toFixed(2)}\nPotential SHORT confirmation incoming.`);
@@ -2546,7 +2548,7 @@ function detectLiquiditySweeps(k,fresh){
     S.chatHistory=S.chatHistory||[];
     S.chatHistory.push({
       role:'user',
-      content:`[SYSTEM] SSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMinLow.toFixed(2)}). Watch for displacement + FVG creation immediately after — that FVG is a HIGH-PROBABILITY LONG entry zone (A+ setup). If HTF bias agrees, prioritize this trade.`
+      content:`[SYSTEM] SSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMinLow.toFixed(2)}). Now WAIT for 1M BOS up → 1M displacement → 1M FVG. Only enter when price retraces into that 1M FVG. NO 1M BOS = NO TRADE. SL beyond swept level. A+ setup if all conditions align with HTF LONG bias.`
     });
     showPopup(`💧 ${tfLabel} SSL ${o.price} swept`,'update',6000);
     sendTelegram(`💧 <b>SSL SWEPT</b>\n\n${tfLabel} SSL at ${o.price}\nPrice reached ${recentMinLow.toFixed(2)}\nPotential LONG confirmation incoming.`);
@@ -2906,25 +2908,31 @@ Use a hierarchy:
 The 1M chart is CRITICAL — it shows the most precise entry triggers (sweep wicks, micro-FVG fills, micro-OB taps). Always check 1M FVGs, OBs, BSL/SSL and breakers BEFORE calling a trade — they tell you the exact moment to enter.
 
 🏆 A+ SETUP (HIGHEST PROBABILITY — prioritize this above all):
-**SWEEP → DISPLACEMENT → FVG**
+**SWEEP → 1M BOS → 1M DISPLACEMENT → 1M FVG → ENTRY**
 
-The sweep can happen on ANY timeframe — BSL/SSL on 15M, 5M, OR 1M. Higher timeframe sweeps are stronger:
+The sweep can happen on ANY timeframe (BSL/SSL on 15M, 5M, or 1M) — higher TF sweeps are stronger:
 - **15M sweep** = strongest signal (institutional liquidity raid) — biggest moves follow
 - **5M sweep** = strong (intraday liquidity grab) — solid setups
 - **1M sweep** = micro-sweep (precise timing trigger) — fast scalps
 
-Sequence (regardless of TF):
-1. Price sweeps a liquidity level (BSL or SSL) on ANY timeframe (15M/5M/1M)
-2. Strong reversal candle(s) immediately after — clear displacement in opposite direction
-3. The displacement leaves a fresh FVG behind (often visible on 1M or 5M)
-4. WAIT for price to retrace INTO that fresh post-sweep FVG
-5. Enter on the rejection from that FVG — this is the institutional re-entry zone
+⚡ CRITICAL RULE — BOS, DISPLACEMENT and FVG must ALL be on the 1M chart, regardless of where the sweep happened:
 
-⚡ KEY: When you see a 15M BSL/SSL sweep, the resulting FVG (even on 1M) is the highest-probability entry of the day. Always check ALL three TFs after a sweep — the FVG might form on a different TF than where the sweep occurred.
+Sequence:
+1. **Sweep** on ANY timeframe (15M/5M/1M) of BSL or SSL
+2. **1M BOS** — the 1M chart MUST close beyond a recent significant 1M swing in the reversal direction. This confirms the sweep was real and institutional flow has shifted. NO 1M BOS = NO TRADE.
+3. **1M Displacement** — strong impulsive 1M candle(s) immediately after the BOS, in the reversal direction.
+4. **1M FVG** — that displacement leaves a fresh Fair Value Gap on the 1M chart specifically.
+5. **Wait for retrace** of price INTO that 1M FVG.
+6. **Enter on the rejection** from the 1M FVG — this is the institutional re-entry zone.
 
-When you see this sequence, the post-sweep FVG is NOT a regular FVG — it is a HIGH-PROBABILITY ENTRY ZONE. SL beyond the swept level. TP nearest opposing liquidity (any TF).
+The sweep can be on a higher TF, but the confirmation chain (BOS → displacement → FVG → entry) is ALL on 1M. This is the timing precision that separates A+ from generic setups.
 
-In your message: "15M BSL swept + 1M FVG 84450-84470 = LONG retrace setup" → call TRADE:: with FVG entry.
+WITHOUT 1M BOS: skip the trade. The sweep alone is not enough — you need 1M structure to confirm the reversal.
+
+SL: beyond the swept liquidity level (where institutions would invalidate)
+TP: nearest opposing liquidity (any TF)
+
+In your message: "15M BSL swept + 1M BOS down + 1M FVG 84455-84470 = SHORT retrace setup" → call TRADE:: with 1M FVG entry.
 
 Wait for ONE of these in HTF bias direction:
 
@@ -3074,8 +3082,9 @@ async function runAnalysisContinuation(){
   const ctx=buildMarketSummary();
   if(!ctx){setAgentStatus('watching');return;}
   S.marketContext=ctx;
-  const tradeStatus=activeTrade?`You have an active ${activeTrade.dir} @ ${activeTrade.entry}.`:'No active trade.';
-  const prompt=`Session resumed. ${tradeStatus} Refresh your structural read with current market state. If a new setup formed, call it with TRADE::. Max 2 sentences.`;
+  const prompt=activeTrade
+    ? `Session resumed. You have an OPEN ${activeTrade.dir} @ ${activeTrade.entry} (SL ${activeTrade.sl} / TP ${activeTrade.tp}). DO NOT open a new trade — only manage the existing one. Comment briefly on whether the trade is still valid given current 1M structure. Reply with "TRADE::NONE" at the end (do not change the open trade). Max 1 sentence.`
+    : `Session resumed. No active trade. Refresh your structural read with current market state. If a CLEAR A+ setup is forming, call it with TRADE::. Otherwise reply with "TRADE::NONE". Max 1 sentence.`;
   S.chatHistory.push({role:'user',content:prompt});
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
@@ -3215,6 +3224,11 @@ function parseTrade(text){
   const m=text.match(/TRADE::(LONG|SHORT|NONE)\|?([0-9.]*)\|?([0-9.]*)\|?([0-9.]*)/);
   if(!m)return null;
   const trade={dir:m[1],entry:m[2],sl:m[3],tp:m[4]};
+  // GLOBAL GUARD — never allow new trade activation while one is already open
+  if(trade.dir!=='NONE'&&activeTrade){
+    log(`⚠ Trade blocked — already in ${activeTrade.dir} @ ${activeTrade.entry}. Close current trade first.`,'warn');
+    return null;
+  }
   // VALIDATION — reject stale entry prices
   if(trade.dir!=='NONE'&&trade.entry&&S.lastPrice){
     const entry=parseFloat(trade.entry);
@@ -3556,7 +3570,7 @@ function detectTradeEvents(text){
   }
 }
 
-function updateTradeBox(t){
+function updateTradeBox(t,silent=false){
   if(!t||t.dir==='NONE')return;
   const isBull=t.dir==='LONG';
   clearTradeLines();
@@ -3631,12 +3645,13 @@ function updateTradeBox(t){
   document.getElementById('tradeTime').textContent=' · '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
 
   drawTradeLines(t);
-  speak(`New ${isBull?'long':'short'} trade. Entry ${t.entry}`);
-  sendTelegram(tgFormatTrade(t));
-  // send chart screenshot right after trade alert (wait briefly so the trade lines are drawn first)
-  setTimeout(()=>{
-    sendChartsToTelegram(`📸 ${t.dir} ${t.entry} — chart snapshot`);
-  },1500);
+  if(!silent){
+    speak(`New ${isBull?'long':'short'} trade. Entry ${t.entry}`);
+    sendTelegram(tgFormatTrade(t));
+    setTimeout(()=>{
+      sendChartsToTelegram(`📸 ${t.dir} ${t.entry} — chart snapshot`);
+    },1500);
+  }
 }
 
 // ── CONVICTION MONITOR — updates every 30s, alerts on change ─────────────────
@@ -3683,11 +3698,18 @@ function updateTradeConviction(m15,m5,m1){
 }
 
 async function updateConviction(){
-  if(!S.running||!S.candles.M15.length)return;
+  if(!S.running||!S.candles.M15.length){
+    console.log('[CONV] skipped - running:',S.running,'candles:',S.candles.M15.length);
+    return;
+  }
   const m15=buildCtx('M15'),m5=buildCtx('M5'),m1=buildCtx('M1');
-  if(!m15||!m5||!m1)return;
+  if(!m15||!m5||!m1){
+    console.log('[CONV] skipped - ctx missing');
+    return;
+  }
 
   const cv=calcConviction(m15,m5,m1);
+  console.log('[CONV] score:',cv.score,'/',cv.max,cv.label);
   const colors={HIGH:'#2a2a2a',MEDIUM:'#a89968',LOW:'#7a7a78'};
   const colorKey=cv.label.includes('HIGH')?'HIGH':cv.label.includes('MEDIUM')?'MEDIUM':'LOW';
   const color=colors[colorKey];
@@ -3863,8 +3885,9 @@ async function startSession(){
     setInterval(()=>{if(S.running)drawLiquidityLevels();},30000);
 
     // multi-pair scanner every 5 min
-    setInterval(scanOtherPairs,300000);
-    setTimeout(scanOtherPairs,30000);
+    // multi-pair scanner DISABLED — user trades BTC only
+    // setInterval(scanOtherPairs,300000);
+    // setTimeout(scanOtherPairs,30000);
 
   }catch(e){
     log('Startup error: '+e.message,'err');
