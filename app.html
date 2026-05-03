@@ -1959,9 +1959,14 @@ function connectWS(k){
     log(`WS ${k} connected`);
     S.wsLastMsg=S.wsLastMsg||{};
     S.wsLastMsg[k]=Date.now();
+    S.wsMsgCount=S.wsMsgCount||{};
+    S.wsMsgCount[k]=0;
   };
   ws.onmessage=(e)=>{
     try{
+      // DEBUG counter — log every 10 messages
+      S.wsMsgCount[k]=(S.wsMsgCount[k]||0)+1;
+      if(S.wsMsgCount[k]%20===1){log(`WS ${k} msg #${S.wsMsgCount[k]}`);}
       const msg=JSON.parse(e.data);
       const kline=msg.k;
       if(!kline)return;
