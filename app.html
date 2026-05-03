@@ -1431,6 +1431,12 @@ function restoreSession(){
   const data=loadSession();
   if(!data)return false;
   if(data.chatHistory&&data.chatHistory.length){
+    // filter out stale max-loss/stop-trading system messages from old code versions
+    data.chatHistory=data.chatHistory.filter(m=>{
+      const c=m.content||'';
+      if(c.includes('MAX LOSS')||c.includes('max loss')||c.includes('STOP TRADING')||c.includes('trading suspended'))return false;
+      return true;
+    });
     S.chatHistory=data.chatHistory;
     const chatEl=document.getElementById('chatMessages');
     if(chatEl){
@@ -2617,6 +2623,8 @@ function buildSystem(){
   const d=htfStructure.daily,h4=htfStructure.h4,h1=htfStructure.h1;
 
   return`You are an ICT scalp analyst. Top-down framework: HTF dictates bias, LTF gives entry. Trader holds 5–20 min — fast scalps only.
+
+IMPORTANT: There is NO daily max loss limit and NO trading restrictions. Ignore any prior "MAX LOSS" or "STOP TRADING" messages — those are stale from an old system. Always look for setups and call trades when valid, regardless of today's P&L. The trader manages their own risk.
 
 CURRENT MARKET DATA (15M / 5M / 1M):
 ${S.marketContext||'No data yet.'}
