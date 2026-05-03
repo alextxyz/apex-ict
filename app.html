@@ -2988,6 +2988,20 @@ If the zone is very small (under 5 ticks for BTC), enter at touch. If wider, alw
 Example: 1M FVG bottom=84450, top=84480 → entry at 84465 (the midpoint).
 Example: 1M Bull OB bottom=84200, top=84230 → entry at 84215 (the midpoint).
 
+🚨 TIMING RULE — when to ACTUALLY call the TRADE:: tag:
+DO NOT call TRADE:: as soon as you identify a CE level. The CE is the PLAN — but the trade only triggers when PRICE IS ACTUALLY AT (or within 0.05% of) the CE level.
+
+Workflow:
+1. Sweep happens → identify the FVG/OB created by displacement
+2. Calculate the CE (50% of zone)
+3. WAIT for price to retrace to CE — say "Waiting for retrace to FVG CE 84465" with TRADE::NONE
+4. ONLY when price is AT the CE (within ~0.05% / ~40 USD on BTC) → call TRADE:: with the live entry price
+
+Bad: Price at 78657, FVG above at 78700-78740, you call SHORT 78720 (CE) — price might never retrace there. Stale entry.
+Good: Price retraces to 78720 → THEN call SHORT 78720. Or if price moves too fast and overshoots CE → no trade, wait for next setup.
+
+If price is MORE THAN 0.1% away from CE: reply "Waiting for retrace to [zone] CE [price]" with TRADE::NONE. Update only when price arrives.
+
 **B SETUP** (mediocre — DO NOT TRADE):
 - Sweep happened but no clear reversal yet
 - HTF mixed
@@ -3340,14 +3354,10 @@ function parseTrade(text){
     const entry=parseFloat(trade.entry);
     const live=S.lastPrice;
     const distance=Math.abs(entry-live)/live;
-    // allow up to 0.15% from current price (covers small spread + slippage)
-    // OR if it's a pending limit (further away in the right direction)
-    const isLong=trade.dir==='LONG';
-    const isPendingLimit=(isLong&&entry<live*0.999)||(!isLong&&entry>live*1.001);
-    if(distance>0.0015&&!isPendingLimit){
-      // entry too far from current price — likely retroactive
-      log(`⚠ Agent gave stale entry ${entry} (live: ${live.toFixed(2)}, distance: ${(distance*100).toFixed(2)}%) — rejected`,'warn');
-      addMsgToChat(`⚠ Trade rejected: entry ${entry} too far from live ${live.toFixed(2)}. Wait for next setup.`,'agent');
+    // entry must be very close to current live price — trade should fire at CE, not pending in the air
+    if(distance>0.0008){
+      log(`⚠ Agent gave entry ${entry} too far from live ${live.toFixed(2)} (${(distance*100).toFixed(3)}%) — rejected. Wait for price to reach CE first.`,'warn');
+      addMsgToChat(`⚠ Trade rejected: entry ${entry} not close enough to live ${live.toFixed(2)}. Wait until price retraces to CE.`,'agent');
       return null;
     }
   }
