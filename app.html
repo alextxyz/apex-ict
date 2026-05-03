@@ -2450,7 +2450,7 @@ function detectLiquiditySweeps(k,fresh){
       S.chatHistory=S.chatHistory||[];
       S.chatHistory.push({
         role:'user',
-        content:`[SYSTEM] BSL liquidity at ${o.price} just swept on ${tfLabel}. This is a potential setup for SHORT confirmation if HTF bias agrees. Note for next analysis.`
+        content:`[SYSTEM] BSL liquidity at ${o.price} just swept on ${tfLabel}. Watch for displacement + FVG creation immediately after — that FVG is a HIGH-PROBABILITY SHORT entry zone (A+ setup: sweep → reverse → FVG retrace). If HTF bias agrees, prioritize this trade.`
       });
       showPopup(`💧 ${tfLabel} BSL ${o.price} swept`,'update',6000);
       sendTelegram(`💧 <b>BSL SWEPT</b>\n\n${tfLabel} BSL at ${o.price}\nPotential SHORT confirmation incoming.`);
@@ -2462,7 +2462,7 @@ function detectLiquiditySweeps(k,fresh){
       S.chatHistory=S.chatHistory||[];
       S.chatHistory.push({
         role:'user',
-        content:`[SYSTEM] SSL liquidity at ${o.price} just swept on ${tfLabel}. This is a potential setup for LONG confirmation if HTF bias agrees. Note for next analysis.`
+        content:`[SYSTEM] SSL liquidity at ${o.price} just swept on ${tfLabel}. Watch for displacement + FVG creation immediately after — that FVG is a HIGH-PROBABILITY LONG entry zone (A+ setup: sweep → reverse → FVG retrace). If HTF bias agrees, prioritize this trade.`
       });
       showPopup(`💧 ${tfLabel} SSL ${o.price} swept`,'update',6000);
       sendTelegram(`💧 <b>SSL SWEPT</b>\n\n${tfLabel} SSL at ${o.price}\nPotential LONG confirmation incoming.`);
@@ -2816,6 +2816,28 @@ Use a hierarchy:
 
 ▌ STEP 4 — LTF ENTRY TRIGGER (5M for confirmation / 1M for timing)
 The 1M chart is CRITICAL — it shows the most precise entry triggers (sweep wicks, micro-FVG fills, micro-OB taps). Always check 1M FVGs, OBs, BSL/SSL and breakers BEFORE calling a trade — they tell you the exact moment to enter.
+
+🏆 A+ SETUP (HIGHEST PROBABILITY — prioritize this above all):
+**SWEEP → DISPLACEMENT → FVG**
+
+The sweep can happen on ANY timeframe — BSL/SSL on 15M, 5M, OR 1M. Higher timeframe sweeps are stronger:
+- **15M sweep** = strongest signal (institutional liquidity raid) — biggest moves follow
+- **5M sweep** = strong (intraday liquidity grab) — solid setups
+- **1M sweep** = micro-sweep (precise timing trigger) — fast scalps
+
+Sequence (regardless of TF):
+1. Price sweeps a liquidity level (BSL or SSL) on ANY timeframe (15M/5M/1M)
+2. Strong reversal candle(s) immediately after — clear displacement in opposite direction
+3. The displacement leaves a fresh FVG behind (often visible on 1M or 5M)
+4. WAIT for price to retrace INTO that fresh post-sweep FVG
+5. Enter on the rejection from that FVG — this is the institutional re-entry zone
+
+⚡ KEY: When you see a 15M BSL/SSL sweep, the resulting FVG (even on 1M) is the highest-probability entry of the day. Always check ALL three TFs after a sweep — the FVG might form on a different TF than where the sweep occurred.
+
+When you see this sequence, the post-sweep FVG is NOT a regular FVG — it is a HIGH-PROBABILITY ENTRY ZONE. SL beyond the swept level. TP nearest opposing liquidity (any TF).
+
+In your message: "15M BSL swept + 1M FVG 84450-84470 = LONG retrace setup" → call TRADE:: with FVG entry.
+
 Wait for ONE of these in HTF bias direction:
 
 **A) Liquidity Sweep + Reaction**
