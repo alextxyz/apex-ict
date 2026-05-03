@@ -2323,24 +2323,56 @@ function swings(c,lb=3){
   }
   return{hi:hi.slice(-5),lo:lo.slice(-5)};
 }
+
+// proper ICT BSL/SSL detection
+// BSL = significant swing HIGH not yet taken out (price hasn't traded above it since formation)
+// SSL = significant swing LOW not yet taken out (price hasn't traded below it since formation)
+// We use a longer lookback (5 bars each side) to ignore micro-swings, and only keep levels still active.
 function eqLevels(c,tol=0.001){
-  const bsl=[],ssl=[];
-  for(let i=0;i<c.length-5;i++)for(let j=i+5;j<c.length;j++){
-    if(Math.abs(c[i].high-c[j].high)/c[i].high<tol){
-      bsl.push({price:((c[i].high+c[j].high)/2).toFixed(2),time:c[i].time});
-    }
-    if(Math.abs(c[i].low-c[j].low)/c[i].low<tol){
-      ssl.push({price:((c[i].low+c[j].low)/2).toFixed(2),time:c[i].time});
-    }
+  if(!c||c.length<20)return{bsl:[],ssl:[]};
+  const lb=5; // strict: 5 candles each side = real swing point
+  const swingHighs=[]; // {price, time, idx}
+  const swingLows=[];
+
+  for(let i=lb;i<c.length-lb;i++){
+    const window=c.slice(i-lb,i+lb+1);
+    const isHigh=c[i].high===Math.max(...window.map(x=>x.high));
+    const isLow=c[i].low===Math.min(...window.map(x=>x.low));
+    if(isHigh)swingHighs.push({price:c[i].high,time:c[i].time,idx:i});
+    if(isLow)swingLows.push({price:c[i].low,time:c[i].time,idx:i});
   }
-  // dedupe by price, keep earliest time, take last 3
+
+  // BSL: a swing high is liquidity if NO LATER candle has traded above it
+  const bsl=[];
+  swingHighs.forEach(sh=>{
+    let swept=false;
+    for(let j=sh.idx+1;j<c.length;j++){
+      if(c[j].high>sh.price){swept=true;break;}
+    }
+    if(!swept)bsl.push({price:sh.price.toFixed(2),time:sh.time});
+  });
+
+  // SSL: swing low is liquidity if no LATER candle has traded below it
+  const ssl=[];
+  swingLows.forEach(sl=>{
+    let swept=false;
+    for(let j=sl.idx+1;j<c.length;j++){
+      if(c[j].low<sl.price){swept=true;break;}
+    }
+    if(!swept)ssl.push({price:sl.price.toFixed(2),time:sl.time});
+  });
+
+  // dedupe near-equal prices and keep most recent significant ones
   const dedupe=arr=>{
-    const map=new Map();
+    const out=[];
+    arr.sort((a,b)=>b.time-a.time); // newest first
     arr.forEach(o=>{
-      if(!map.has(o.price)||map.get(o.price).time>o.time)map.set(o.price,o);
+      const dup=out.find(x=>Math.abs(parseFloat(x.price)-parseFloat(o.price))/parseFloat(o.price)<tol);
+      if(!dup)out.push(o);
     });
-    return Array.from(map.values()).slice(-3);
+    return out.slice(0,4); // keep top 4 most recent unique levels
   };
+
   return{bsl:dedupe(bsl),ssl:dedupe(ssl)};
 }
 function fvgs(c){
