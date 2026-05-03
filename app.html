@@ -2353,7 +2353,6 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
     const window=c.slice(i-lb,i+lb+1);
     const isHigh=c[i].high===Math.max(...window.map(x=>x.high));
     const isLow=c[i].low===Math.min(...window.map(x=>x.low));
-    // SIGNIFICANCE FILTER: total local range around swing must be meaningful
     if(isHigh){
       const localLow=Math.min(...window.map(x=>x.low));
       const range=(c[i].high-localLow)/c[i].high;
@@ -2370,25 +2369,29 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
     }
   }
 
-  // BSL: a swing high is liquidity if NO LATER candle has traded above it
+  // BSL: a swing high is liquidity if no LATER candle has CLOSED above it
+  // (using close, not high — wicks above don't count as a real sweep)
   const bsl=[];
   swingHighs.forEach(sh=>{
     let swept=false;
     for(let j=sh.idx+1;j<c.length;j++){
-      if(c[j].high>sh.price){swept=true;break;}
+      if(c[j].close>sh.price){swept=true;break;}
     }
     if(!swept)bsl.push({price:sh.price.toFixed(2),time:sh.time,strength:sh.strength});
   });
 
-  // SSL: swing low is liquidity if no LATER candle has traded below it
+  // SSL: swing low is liquidity if no LATER candle has CLOSED below it
   const ssl=[];
   swingLows.forEach(sl=>{
     let swept=false;
     for(let j=sl.idx+1;j<c.length;j++){
-      if(c[j].low<sl.price){swept=true;break;}
+      if(c[j].close<sl.price){swept=true;break;}
     }
     if(!swept)ssl.push({price:sl.price.toFixed(2),time:sl.time,strength:sl.strength});
   });
+
+  // debug — log counts each call
+  console.log('[EQLEVELS]',{candleCount:c.length,swingHighs:swingHighs.length,swingLows:swingLows.length,bsl:bsl.length,ssl:ssl.length,minMovePct,lb,bslPrices:bsl.slice(0,5).map(x=>x.price),sslPrices:ssl.slice(0,5).map(x=>x.price)});
 
   // dedupe near-equal prices, keep STRONGEST (most significant) and most recent
   const dedupe=arr=>{
