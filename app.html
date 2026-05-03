@@ -1969,30 +1969,50 @@ function startWSHealthMonitor(){
   wsHealthInterval=setInterval(()=>{
     if(!S.running)return;
     const now=Date.now();
-    // expected message intervals (Binance pings every ~3 sec for active candles)
-    const maxStale={M1:15000,M5:20000,M15:30000}; // generous thresholds
+    // generous thresholds — Binance only sends when price changes
+    // during quiet periods 60-120s of silence is normal
+    const maxStale={M1:90000,M5:180000,M15:300000};
     ['M15','M5','M1'].forEach(k=>{
       const last=S.wsLastMsg?.[k]||0;
       const age=now-last;
-      if(age>maxStale[k]){
-        log(`⚠ WS ${k} stalled ${Math.round(age/1000)}s — forcing reconnect`,'warn');
-        try{S.ws[k]?.close();}catch(e){}
-        // ws.onclose will trigger reconnect
-        S.wsLastMsg[k]=Date.now(); // reset to avoid spam
+      // also check WebSocket readyState — only reconnect if actually disconnected
+      const ws=S.ws[k];
+      const isClosed=!ws||ws.readyState===WebSocket.CLOSED||ws.readyState===WebSocket.CLOSING;
+      if(age>maxStale[k]&&isClosed){
+        log(`⚠ WS ${k} closed and stale — reconnecting`,'warn');
+        try{ws?.close();}catch(e){}
+        S.wsLastMsg[k]=Date.now();
+      } else if(age>maxStale[k]*2&&!isClosed){
+        // only force-reconnect a "live" socket if it's been silent for VERY long
+        log(`⚠ WS ${k} silent for ${Math.round(age/1000)}s — forcing reconnect`,'warn');
+        try{ws?.close();}catch(e){}
+        S.wsLastMsg[k]=Date.now();
       }
     });
-  },5000);
+  },10000); // check every 10 sec
 }
 
-// also handle tab visibility — browsers throttle background tabs
+// handle tab visibility — only reconnect if connections are actually broken
+let lastVisibilityChange=0;
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&S.running){
-    log('Tab visible — refreshing connections','ok');
-    // force reconnect all to catch up
+    // throttle — don't reconnect on every quick tab switch
+    const now=Date.now();
+    if(now-lastVisibilityChange<30000)return;
+    lastVisibilityChange=now;
+    // only reconnect sockets that are actually broken
+    let needRefresh=false;
     ['M15','M5','M1'].forEach(k=>{
-      try{S.ws[k]?.close();}catch(e){}
+      const ws=S.ws[k];
+      if(!ws||ws.readyState!==WebSocket.OPEN){needRefresh=true;}
     });
-    if(S.wsPrice)try{S.wsPrice.close();}catch(e){}
+    if(needRefresh){
+      log('Tab visible — refreshing broken connections','ok');
+      ['M15','M5','M1'].forEach(k=>{
+        const ws=S.ws[k];
+        if(!ws||ws.readyState!==WebSocket.OPEN){try{ws?.close();}catch(e){}}
+      });
+    }
   }
 });
 
