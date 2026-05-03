@@ -2351,8 +2351,12 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
   // ARE the ones still drawing institutional interest.
   for(let i=lb;i<c.length-lb;i++){
     const window=c.slice(i-lb,i+lb+1);
-    const isHigh=c[i].high===Math.max(...window.map(x=>x.high));
-    const isLow=c[i].low===Math.min(...window.map(x=>x.low));
+    const winHi=Math.max(...window.map(x=>x.high));
+    const winLo=Math.min(...window.map(x=>x.low));
+    // accept as swing if within tiny tolerance of window extreme (catches near-equal highs/lows)
+    const eqEps=1e-6;
+    const isHigh=Math.abs(c[i].high-winHi)<=eqEps;
+    const isLow=Math.abs(c[i].low-winLo)<=eqEps;
     if(isHigh){
       const localLow=Math.min(...window.map(x=>x.low));
       const range=(c[i].high-localLow)/c[i].high;
