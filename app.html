@@ -957,11 +957,11 @@ async function runBacktest(){
     const prev=recent[recent.length-2];
 
     if(pd.pos==='DISCOUNT'&&eq.ssl.length){
-      const sslLevel=parseFloat(eq.ssl[eq.ssl.length-1]);
+      const sslLevel=parseFloat(eq.ssl[eq.ssl.length-1].price);
       if(prev&&prev.low<sslLevel&&last.close>sslLevel&&fg.some(f=>f.type==='BULL')){
         const entry=last.close;
         const sl=Math.min(prev.low,last.low)*0.998;
-        const nearestBSL=eq.bsl.length?parseFloat(eq.bsl[eq.bsl.length-1]):entry+(entry-sl)*2;
+        const nearestBSL=eq.bsl.length?parseFloat(eq.bsl[eq.bsl.length-1].price):entry+(entry-sl)*2;
         const tp=Math.max(entry+(entry-sl)*1.5,nearestBSL);
         let outcome='OPEN',exitPrice=entry,bars=0;
         for(let j=1;j<=20&&i+j<allCandles.length;j++){
@@ -975,11 +975,11 @@ async function runBacktest(){
       }
     }
     if(pd.pos==='PREMIUM'&&eq.bsl.length){
-      const bslLevel=parseFloat(eq.bsl[eq.bsl.length-1]);
+      const bslLevel=parseFloat(eq.bsl[eq.bsl.length-1].price);
       if(prev&&prev.high>bslLevel&&last.close<bslLevel&&fg.some(f=>f.type==='BEAR')){
         const entry=last.close;
         const sl=Math.max(prev.high,last.high)*1.002;
-        const nearestSSL=eq.ssl.length?parseFloat(eq.ssl[eq.ssl.length-1]):entry-(sl-entry)*2;
+        const nearestSSL=eq.ssl.length?parseFloat(eq.ssl[eq.ssl.length-1].price):entry-(sl-entry)*2;
         const tp=Math.min(entry-(sl-entry)*1.5,nearestSSL);
         let outcome='OPEN',exitPrice=entry,bars=0;
         for(let j=1;j<=20&&i+j<allCandles.length;j++){
@@ -2326,10 +2326,22 @@ function swings(c,lb=3){
 function eqLevels(c,tol=0.001){
   const bsl=[],ssl=[];
   for(let i=0;i<c.length-5;i++)for(let j=i+5;j<c.length;j++){
-    if(Math.abs(c[i].high-c[j].high)/c[i].high<tol)bsl.push(((c[i].high+c[j].high)/2).toFixed(2));
-    if(Math.abs(c[i].low-c[j].low)/c[i].low<tol)ssl.push(((c[i].low+c[j].low)/2).toFixed(2));
+    if(Math.abs(c[i].high-c[j].high)/c[i].high<tol){
+      bsl.push({price:((c[i].high+c[j].high)/2).toFixed(2),time:c[i].time});
+    }
+    if(Math.abs(c[i].low-c[j].low)/c[i].low<tol){
+      ssl.push({price:((c[i].low+c[j].low)/2).toFixed(2),time:c[i].time});
+    }
   }
-  return{bsl:[...new Set(bsl)].slice(-3),ssl:[...new Set(ssl)].slice(-3)};
+  // dedupe by price, keep earliest time, take last 3
+  const dedupe=arr=>{
+    const map=new Map();
+    arr.forEach(o=>{
+      if(!map.has(o.price)||map.get(o.price).time>o.time)map.set(o.price,o);
+    });
+    return Array.from(map.values()).slice(-3);
+  };
+  return{bsl:dedupe(bsl),ssl:dedupe(ssl)};
 }
 function fvgs(c){
   const out=[];
@@ -2388,10 +2400,10 @@ function drawLiquidityLevels(){
     if(!ctx)return;
     const chartEl=document.getElementById('chart-'+k);
     const series=S.series[k];
-    if(!chartEl||!series)return;
+    const chart=S.charts[k];
+    if(!chartEl||!series||!chart)return;
     chartEl.style.position='relative';
 
-    // remove old SVG overlay for this TF
     if(liquidityOverlays[k]){
       try{liquidityOverlays[k].svg.remove();clearInterval(liquidityOverlays[k].timer);}catch(e){}
     }
@@ -2412,20 +2424,24 @@ function drawLiquidityLevels(){
       const fresh=buildCtx(k);
       if(!fresh)return;
 
-      // draw BSL — blueish/dark color, dashed
-      fresh.bsl.forEach(price=>{
+      const drawLevel=(price,time,label,lineColor,labelBg)=>{
         const p=parseFloat(price);
         const y=series.priceToCoordinate(p);
         if(y==null)return;
-        // line
+        // start x from the originating candle's time
+        let xStart=0;
+        if(time){
+          const tx=chart.timeScale().timeToCoordinate(time);
+          if(tx!=null&&tx>0)xStart=tx;
+        }
+        // line from origin candle to right edge
         const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1',0);line.setAttribute('y1',y);
+        line.setAttribute('x1',xStart);line.setAttribute('y1',y);
         line.setAttribute('x2',lineEnd);line.setAttribute('y2',y);
-        line.setAttribute('stroke','rgba(70,90,140,0.55)');
-        line.setAttribute('stroke-width','1');
-        line.setAttribute('stroke-dasharray','4,3');
+        line.setAttribute('stroke',lineColor);
+        line.setAttribute('stroke-width','1.2');
         svg.appendChild(line);
-        // small label "BSL" on the right end (no price)
+        // label pill near right edge
         const labelW=26,labelH=13;
         const x=lineEnd-labelW-2;
         const yTop=y-labelH/2;
@@ -2433,7 +2449,7 @@ function drawLiquidityLevels(){
         bgRect.setAttribute('x',x);bgRect.setAttribute('y',yTop);
         bgRect.setAttribute('width',labelW);bgRect.setAttribute('height',labelH);
         bgRect.setAttribute('rx','2');bgRect.setAttribute('ry','2');
-        bgRect.setAttribute('fill','rgba(70,90,140,0.85)');
+        bgRect.setAttribute('fill',labelBg);
         svg.appendChild(bgRect);
         const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
         txt.setAttribute('x',x+labelW/2);txt.setAttribute('y',y+1);
@@ -2444,43 +2460,14 @@ function drawLiquidityLevels(){
         txt.setAttribute('letter-spacing','0.3');
         txt.setAttribute('text-anchor','middle');
         txt.setAttribute('dominant-baseline','middle');
-        txt.textContent='BSL';
+        txt.textContent=label;
         svg.appendChild(txt);
-      });
+      };
 
-      // draw SSL — purple/burgundy, dashed
-      fresh.ssl.forEach(price=>{
-        const p=parseFloat(price);
-        const y=series.priceToCoordinate(p);
-        if(y==null)return;
-        const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1',0);line.setAttribute('y1',y);
-        line.setAttribute('x2',lineEnd);line.setAttribute('y2',y);
-        line.setAttribute('stroke','rgba(140,80,110,0.55)');
-        line.setAttribute('stroke-width','1');
-        line.setAttribute('stroke-dasharray','4,3');
-        svg.appendChild(line);
-        const labelW=26,labelH=13;
-        const x=lineEnd-labelW-2;
-        const yTop=y-labelH/2;
-        const bgRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
-        bgRect.setAttribute('x',x);bgRect.setAttribute('y',yTop);
-        bgRect.setAttribute('width',labelW);bgRect.setAttribute('height',labelH);
-        bgRect.setAttribute('rx','2');bgRect.setAttribute('ry','2');
-        bgRect.setAttribute('fill','rgba(140,80,110,0.85)');
-        svg.appendChild(bgRect);
-        const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
-        txt.setAttribute('x',x+labelW/2);txt.setAttribute('y',y+1);
-        txt.setAttribute('fill','#fafaf9');
-        txt.setAttribute('font-family',"'JetBrains Mono', monospace");
-        txt.setAttribute('font-size','8');
-        txt.setAttribute('font-weight','700');
-        txt.setAttribute('letter-spacing','0.3');
-        txt.setAttribute('text-anchor','middle');
-        txt.setAttribute('dominant-baseline','middle');
-        txt.textContent='SSL';
-        svg.appendChild(txt);
-      });
+      // BSL — solid blueish line
+      fresh.bsl.forEach(o=>drawLevel(o.price,o.time,'BSL','rgba(70,90,140,0.7)','rgba(70,90,140,0.9)'));
+      // SSL — solid burgundy line
+      fresh.ssl.forEach(o=>drawLevel(o.price,o.time,'SSL','rgba(140,80,110,0.7)','rgba(140,80,110,0.9)'));
     }
 
     redraw();
@@ -2574,8 +2561,8 @@ function buildMarketSummary(){
 ↑ Any TRADE:: entry MUST be within 0.05% of this price (or be a pending limit at unreached level).
 
 ICT STRUCTURE:
-15M: price=${m15.last}|${m15.pd.pos} ${m15.pd.pct}%|SwHi:${m15.swHi.join(',')}|SwLo:${m15.swLo.join(',')}|BSL:${m15.bsl.join(',')||'none'}|SSL:${m15.ssl.join(',')||'none'}|FVG:${m15.fvgs.join('|')||'none'}|OB:${m15.obs.join('|')||'none'}
-5M: price=${m5.last}|${m5.pd.pos} ${m5.pd.pct}%|SwHi:${m5.swHi.join(',')}|SwLo:${m5.swLo.join(',')}|BSL:${m5.bsl.join(',')||'none'}|SSL:${m5.ssl.join(',')||'none'}|FVG:${m5.fvgs.join('|')||'none'}|OB:${m5.obs.join('|')||'none'}|BRK:${m5.brk.join('|')||'none'}
+15M: price=${m15.last}|${m15.pd.pos} ${m15.pd.pct}%|SwHi:${m15.swHi.join(',')}|SwLo:${m15.swLo.join(',')}|BSL:${m15.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m15.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m15.fvgs.join('|')||'none'}|OB:${m15.obs.join('|')||'none'}
+5M: price=${m5.last}|${m5.pd.pos} ${m5.pd.pct}%|SwHi:${m5.swHi.join(',')}|SwLo:${m5.swLo.join(',')}|BSL:${m5.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m5.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m5.fvgs.join('|')||'none'}|OB:${m5.obs.join('|')||'none'}|BRK:${m5.brk.join('|')||'none'}
 1M: price=${m1.last}|${m1.pd.pos} ${m1.pd.pct}%|FVG:${m1.fvgs.join('|')||'none'}|OB:${m1.obs.join('|')||'none'}
 
 DERIVATIVES:
@@ -2601,14 +2588,14 @@ ${S.marketContext||'No data yet.'}
 ═══ TOP-DOWN HTF CONTEXT (use for bias, NOT entry) ═══
 
 ${d?`DAILY: ${d.bias} ${d.pdaPct}% | trend ${d.trend} | last ${d.last}
-  BSL: ${d.bsl.join(',')||'none'} | SSL: ${d.ssl.join(',')||'none'}`:'DAILY: loading...'}
+  BSL: ${d.bsl.map(o=>o.price).join(',')||'none'} | SSL: ${d.ssl.map(o=>o.price).join(',')||'none'}`:'DAILY: loading...'}
 
 ${h4?`4H: ${h4.bias} ${h4.pdaPct}% | trend ${h4.trend} | last ${h4.last}
-  BSL: ${h4.bsl.join(',')||'none'} | SSL: ${h4.ssl.join(',')||'none'}
+  BSL: ${h4.bsl.map(o=>o.price).join(',')||'none'} | SSL: ${h4.ssl.map(o=>o.price).join(',')||'none'}
   FVGs: ${h4.fvgs.length?h4.fvgs.map(f=>f.type+' '+f.lo+'-'+f.hi).join(' | '):'none'}`:'4H: loading...'}
 
 ${h1?`1H: ${h1.bias} ${h1.pdaPct}% | trend ${h1.trend} | last ${h1.last}
-  BSL: ${h1.bsl.join(',')||'none'} | SSL: ${h1.ssl.join(',')||'none'}
+  BSL: ${h1.bsl.map(o=>o.price).join(',')||'none'} | SSL: ${h1.ssl.map(o=>o.price).join(',')||'none'}
   FVGs: ${h1.fvgs.length?h1.fvgs.map(f=>f.type+' '+f.lo+'-'+f.hi).join(' | '):'none'}`:'1H: loading...'}
 
 ${htfLevels.dailyHi?`KEY LEVELS:
@@ -2618,7 +2605,6 @@ Weekly H/L: ${htfLevels.weeklyHi}/${htfLevels.weeklyLo}`:''}
 TIME: ${session.session} session${session.isWeekend?' (WEEKEND — low vol)':''}
 ${journal?`History: ${journal.winRate}% WR (${journal.wins}W/${journal.losses}L)`:''}
 TODAY: ${dailyStats.trades} trades | $${dailyStats.pnl.toFixed(0)}
-${dailyStats.maxLossHit?'⛔ MAX LOSS HIT — DO NOT TRADE':''}
 
 ACTIVE TRADE STATUS: ${activeTrade?`OPEN ${activeTrade.dir} @ ${activeTrade.entry} (SL ${activeTrade.sl} / TP ${activeTrade.tp})`:'NO ACTIVE TRADE — looking for fresh setups'}
 
@@ -2689,7 +2675,6 @@ This is one of Tom's strongest signals when present.
 3. Always know: bias from HTF, target from 15M, entry from LTF trigger.
 4. If price is mid-range (no nearby liquidity) → no setup.
 5. PO3 awareness — don't enter during manipulation phase.
-6. Daily max loss hit → no new trades.
 
 ═══ MESSAGE LENGTH (CRITICAL) ═══
 ULTRA SHORT. Max 1-2 sentences, 15-25 words total.
