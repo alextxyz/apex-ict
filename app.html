@@ -2516,13 +2516,11 @@ function pda(c){
 
 function buildCtx(k){
   const c=S.candles[k];if(!c||c.length<10)return null;
-  // Per-TF tuning to capture only significant liquidity
-  // M1: lb=5 (was 3) + min 0.15% move required → only major intraday highs/lows
-  // M5: lb=5 + min 0.25% move → solid 5M swings
-  // M15: lb=5 + min 0.4% move → real institutional swings
-  const swingLb=k==='M1'?5:5;
+  // Per-TF tuning. Liquidity sources from M5 (the master TF for scalping) are then propagated to all charts.
+  const swingLb=k==='M1'?3:5;
   const eqTol=k==='M1'?0.0005:0.001;
-  const minMove=k==='M1'?0.0015:k==='M5'?0.0025:0.004;
+  // looser significance — show meaningful swings without filtering everything out
+  const minMove=k==='M1'?0.0005:k==='M5'?0.001:0.002;
   const sw=swings(c,swingLb),eq=eqLevels(c,eqTol,swingLb,minMove),fg=fvgs(c),ob=obs(c),brk=breakers(c),pd=pda(c);
   return{
     last:c[c.length-1].close.toFixed(2),pd,
@@ -2687,15 +2685,18 @@ function drawLiquidityLevels(){
         svg.appendChild(txt);
       };
 
-      // M1 gets much higher transparency — visual hints not bold lines
+      // M1 gets higher transparency — visual hints not bold lines
       const isM1=k==='M1';
       const lineAlpha=isM1?0.45:0.7;
       const labelAlpha=isM1?0.75:0.9;
 
+      // ⚡ Liquidity (BSL/SSL) is sourced from 5M for ALL charts — these are the institutional levels that matter.
+      // Falls back to current TF if 5M context not available.
+      const liqCtx=buildCtx('M5')||fresh;
       // BSL — solid blueish line
-      fresh.bsl.forEach(o=>drawLevel(o.price,o.time,'BSL',`rgba(70,90,140,${lineAlpha})`,`rgba(70,90,140,${labelAlpha})`));
+      liqCtx.bsl.forEach(o=>drawLevel(o.price,o.time,'BSL',`rgba(70,90,140,${lineAlpha})`,`rgba(70,90,140,${labelAlpha})`));
       // SSL — solid burgundy line
-      fresh.ssl.forEach(o=>drawLevel(o.price,o.time,'SSL',`rgba(140,80,110,${lineAlpha})`,`rgba(140,80,110,${labelAlpha})`));
+      liqCtx.ssl.forEach(o=>drawLevel(o.price,o.time,'SSL',`rgba(140,80,110,${lineAlpha})`,`rgba(140,80,110,${labelAlpha})`));
 
       // ── FVG BOXES ── unfilled gaps as translucent rectangles
       const drawZoneBox=(top,bot,time,isBull,solid)=>{
@@ -2882,7 +2883,10 @@ ICT STRUCTURE — THESE LEVELS ARE DRAWN ON THE TRADER'S CHART (you must referen
 5M: price=${m5.last}|${m5.pd.pos} ${m5.pd.pct}%|SwHi:${m5.swHi.join(',')}|SwLo:${m5.swLo.join(',')}|BSL:${m5.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m5.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m5.fvgs.join('|')||'none'}|OB:${m5.obs.join('|')||'none'}|BRK:${m5.brk.join('|')||'none'}
 1M: price=${m1.last}|${m1.pd.pos} ${m1.pd.pct}%|BSL:${m1.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m1.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m1.fvgs.join('|')||'none'}|OB:${m1.obs.join('|')||'none'}|BRK:${m1.brk.join('|')||'none'}
 
-⚡ The trader SEES these BSL/SSL lines, FVG boxes, OB boxes and Breaker blocks DRAWN ON ALL 3 CHARTS (15M, 5M, 1M). When you reason, REFERENCE them by price (e.g. "price approaching 15M BSL 84720" or "1M FVG 84455-84470 untapped — entry zone"). Use 15M for bias, 5M for confirmation, 1M for the exact entry trigger.
+⚡ The trader SEES these zones DRAWN ON ALL 3 CHARTS (15M, 5M, 1M). When you reason, REFERENCE them by price.
+- **BSL/SSL liquidity lines** are sourced from the **5M timeframe** and shown on all three charts (consistent across all panels — these are the institutional liquidity levels that matter for scalping).
+- **FVG, OB, Breaker boxes** are timeframe-specific (each chart shows its own).
+Use 15M for bias, 5M for confirmation, 1M for the exact entry trigger.
 
 📐 EQUILIBRIUM RULE (CRITICAL ICT FILTER):
 The drawn FVGs and OBs on charts are ALREADY pre-filtered: only those in the correct zone are shown.
