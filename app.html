@@ -3206,10 +3206,19 @@ TRADE::SHORT|ENTRY|SL|TP
 TRADE::NONE
 ENTRY must be the CURRENT live price ± small spread, OR a pending level.
 
-═══ MANAGEMENT ═══
-"move to breakeven" — at 50% to TP
-"take partial" — at 1R
-"close trade" — if HTF bias flips OR LTF structure breaks
+═══ MANAGEMENT (use EXACT phrases, no variations) ═══
+For trade management, use these EXACT command phrases (the system parses them strictly):
+- "move to breakeven" — moves SL to entry. Use when price is 50% to TP.
+- "take partial" — close part of position at current price. Use at 1R.
+- "move SL to X" — only if you need to tighten SL to a specific price (replace X with number)
+- "move TP to X" — only if you need to extend/reduce TP to a specific price
+- "close trade" — exit immediately if HTF bias flips OR LTF structure breaks
+- "no change" — keep trade as-is (default during normal hold)
+
+⚠ CRITICAL for management messages:
+- NEVER mention prices in the format "TP 78637" or "SL 78728" in management text — the system parses these as updates and may corrupt levels.
+- If you need to reference current TP/SL in your reasoning, use phrases like "current target" or "stop level" without numbers.
+- Only use "move TP to X" or "move SL to X" when you ACTUALLY want to change them.
 
 Be 1-2 sentences MAX. Format: "[HTF bias] + [LTF signal] = [trade]". Direct, fast, decisive.`;
 }
@@ -3790,10 +3799,10 @@ function detectTradeEvents(text){
     showPopup('✂ '+note+' @ '+price,'update',6000);
     sendTelegram(`✂ <b>${note.toUpperCase()}</b>\n\nTake partial @ ${price}`);
   }
-  // SL UPDATE
-  const slm=text.match(/move.*sl.*?to.*?([0-9]{4,}\.?[0-9]*)|tighten.*sl.*?([0-9]{4,}\.?[0-9]*)/i);
+  // SL UPDATE — require explicit "move SL to X" or "tighten SL to X" pattern (no greedy matching)
+  const slm=text.match(/move\s+sl\s+to\s+([0-9]{4,}\.?[0-9]*)|tighten\s+sl\s+to\s+([0-9]{4,}\.?[0-9]*)|sl\s+now\s+at\s+([0-9]{4,}\.?[0-9]*)/i);
   if(slm&&!/entry|breakeven|break.?even/i.test(text)){
-    const v=slm[1]||slm[2];
+    const v=slm[1]||slm[2]||slm[3];
     if(v){
       document.getElementById('slLabel').textContent='STOP LOSS';
       document.getElementById('tradeSL').textContent=v;
@@ -3802,10 +3811,10 @@ function detectTradeEvents(text){
       addTradeStatus('SL updated to '+v,'warn');
     }
   }
-  // TP UPDATE
-  const tpm=text.match(/move.*tp.*?([0-9]{4,}\.?[0-9]*)|tp.*to.*?([0-9]{4,}\.?[0-9]*)/i);
+  // TP UPDATE — require explicit "move TP to X" or "update TP to X" pattern
+  const tpm=text.match(/move\s+tp\s+to\s+([0-9]{4,}\.?[0-9]*)|update\s+tp\s+to\s+([0-9]{4,}\.?[0-9]*)|tp\s+updated\s+to\s+([0-9]{4,}\.?[0-9]*)|new\s+tp\s+([0-9]{4,}\.?[0-9]*)/i);
   if(tpm){
-    const v=tpm[1]||tpm[2];
+    const v=tpm[1]||tpm[2]||tpm[3]||tpm[4];
     if(v){
       document.getElementById('tradeTP').textContent=v;
       if(activeTrade)activeTrade.tp=v;
