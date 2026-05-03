@@ -1747,7 +1747,7 @@ async function triggerLevelAlert(lvl,price){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:80,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:200,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -3297,7 +3297,7 @@ async function runAnalysisContinuation(){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'content-type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:80,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:200,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     const raw=data?.content?.[0]?.text||'(no response)';
@@ -3346,7 +3346,7 @@ async function runAnalysis(isAuto=false){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:80,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:200,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -3395,7 +3395,7 @@ async function sendChat(){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:90,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -3431,6 +3431,18 @@ function parseTrade(text){
   const m=text.match(/TRADE::(LONG|SHORT|NONE)\|?([0-9.]*)\|?([0-9.]*)\|?([0-9.]*)/);
   if(!m)return null;
   const trade={dir:m[1],entry:m[2],sl:m[3],tp:m[4]};
+  // SANITY CHECK — entry/sl/tp must be plausible BTC prices (5+ digits for current era)
+  if(trade.dir!=='NONE'){
+    const e=parseFloat(trade.entry),s=parseFloat(trade.sl),t=parseFloat(trade.tp);
+    const live=S.lastPrice||0;
+    // require at least 4 digits (>= 1000) AND within 50% of live price (sanity vs typo/truncation)
+    const isPlausible=v=>v>=1000&&(live?Math.abs(v-live)/live<0.5:true);
+    if(!isPlausible(e)||!isPlausible(s)||!isPlausible(t)){
+      log(`⚠ Trade rejected — truncated/implausible numbers in TRADE:: tag (entry=${trade.entry}, sl=${trade.sl}, tp=${trade.tp}). Likely max_tokens cut the response.`,'warn');
+      addMsgToChat(`⚠ Trade ignored: numbers look truncated. Live: ${live.toFixed(2)}. Wait for next analysis.`,'agent');
+      return null;
+    }
+  }
   // GLOBAL GUARD — never allow new trade activation while one is already open
   if(trade.dir!=='NONE'&&activeTrade){
     log(`⚠ Trade blocked — already in ${activeTrade.dir} @ ${activeTrade.entry}. Close current trade first.`,'warn');
@@ -4040,7 +4052,7 @@ async function updateConviction(){
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:80,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:200,system:buildSystem(),messages:S.chatHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
