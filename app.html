@@ -2346,29 +2346,26 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
   const swingHighs=[];
   const swingLows=[];
 
-  // only consider swings from the recent portion (last 60% of candles) for relevance
-  const startIdx=Math.max(lb,Math.floor(c.length*0.4));
-  for(let i=startIdx;i<c.length-lb;i++){
+  // scan ALL candles for swing points (not just recent 60%) — unswept liquidity matters even if older.
+  // The unswept-filter below already drops levels that have been taken out, so older levels that survive
+  // ARE the ones still drawing institutional interest.
+  for(let i=lb;i<c.length-lb;i++){
     const window=c.slice(i-lb,i+lb+1);
     const isHigh=c[i].high===Math.max(...window.map(x=>x.high));
     const isLow=c[i].low===Math.min(...window.map(x=>x.low));
-    // SIGNIFICANCE FILTER: swing must have meaningful move on BOTH sides
+    // SIGNIFICANCE FILTER: total local range around swing must be meaningful
     if(isHigh){
-      const leftLow=Math.min(...c.slice(i-lb,i).map(x=>x.low));
-      const rightLow=Math.min(...c.slice(i+1,i+lb+1).map(x=>x.low));
-      const moveLeft=(c[i].high-leftLow)/c[i].high;
-      const moveRight=(c[i].high-rightLow)/c[i].high;
-      if(moveLeft>=minMovePct&&moveRight>=minMovePct){
-        swingHighs.push({price:c[i].high,time:c[i].time,idx:i,strength:Math.min(moveLeft,moveRight)});
+      const localLow=Math.min(...window.map(x=>x.low));
+      const range=(c[i].high-localLow)/c[i].high;
+      if(range>=minMovePct){
+        swingHighs.push({price:c[i].high,time:c[i].time,idx:i,strength:range});
       }
     }
     if(isLow){
-      const leftHigh=Math.max(...c.slice(i-lb,i).map(x=>x.high));
-      const rightHigh=Math.max(...c.slice(i+1,i+lb+1).map(x=>x.high));
-      const moveLeft=(leftHigh-c[i].low)/c[i].low;
-      const moveRight=(rightHigh-c[i].low)/c[i].low;
-      if(moveLeft>=minMovePct&&moveRight>=minMovePct){
-        swingLows.push({price:c[i].low,time:c[i].time,idx:i,strength:Math.min(moveLeft,moveRight)});
+      const localHigh=Math.max(...window.map(x=>x.high));
+      const range=(localHigh-c[i].low)/c[i].low;
+      if(range>=minMovePct){
+        swingLows.push({price:c[i].low,time:c[i].time,idx:i,strength:range});
       }
     }
   }
@@ -2402,7 +2399,7 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
       const dup=out.find(x=>Math.abs(parseFloat(x.price)-parseFloat(o.price))/parseFloat(o.price)<tol);
       if(!dup)out.push(o);
     });
-    return out.slice(0,3);
+    return out.slice(0,5);
   };
 
   return{bsl:dedupe(bsl),ssl:dedupe(ssl)};
