@@ -1902,12 +1902,24 @@ async function loadAllCandles(){
   for(const k of ['M15','M5','M1']){
     try{
       log(`Loading ${TF_LABELS[k]}…`);
-      // 15M = 3000 bars (~31 days), 5M = 2000 bars (~7 days), 1M = 1500 bars (~25 hours)
       const limits={M15:3000,M5:2000,M1:1500};
       const c=await fetchCandles(pair,TF[k],limits[k]);
       S.candles[k]=c;
       S.series[k].setData(c);
-      S.charts[k].timeScale().fitContent();
+      // wait for render then fit + scroll to show last candles with right margin
+      requestAnimationFrame(()=>{
+        try{
+          const ts=S.charts[k].timeScale();
+          // scroll to real-time (last bar) with rightOffset preserved from theme
+          ts.scrollToRealTime();
+          // also set a clean visible range so candles are well-spaced
+          const visibleBars={M15:80,M5:100,M1:120};
+          if(c.length>visibleBars[k]){
+            const last=c.length-1;
+            ts.setVisibleLogicalRange({from:last-visibleBars[k],to:last+30});
+          }
+        }catch(e){}
+      });
       setMeta(k,c);
       log(`${TF_LABELS[k]} OK (${c.length} bars)`,'ok');
     }catch(e){log(`${TF_LABELS[k]} error: ${e.message}`,'err');}
