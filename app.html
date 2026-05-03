@@ -129,10 +129,10 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .chat-send:disabled{opacity:.4;cursor:not-allowed}
 
 /* POPUP */
-.popup-wrap{position:fixed;bottom:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:5px;pointer-events:none;width:clamp(200px,16vw,280px)}
-.popup{background:rgba(255,255,255,.97);border:1px solid var(--border);border-radius:3px;padding:8px 10px;pointer-events:all;transform:translateX(300px);opacity:0;transition:all .3s cubic-bezier(.175,.885,.32,1.275);position:relative;overflow:hidden;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.12);backdrop-filter:blur(8px)}
+.popup-wrap{position:fixed;top:90px;left:24px;z-index:9999;display:flex;flex-direction:column;gap:6px;pointer-events:none;width:clamp(220px,18vw,300px)}
+.popup{background:rgba(255,255,255,.78);border:1px solid rgba(168,153,104,.35);border-radius:4px;padding:9px 11px;pointer-events:all;transform:translateX(-340px);opacity:0;transition:all .35s cubic-bezier(.175,.885,.32,1.275);position:relative;overflow:hidden;cursor:pointer;box-shadow:0 4px 20px rgba(40,40,38,.12),0 0 0 1px rgba(255,255,255,.4) inset;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .popup.show{transform:translateX(0);opacity:1}
-.popup.hide{transform:translateX(420px);opacity:0}
+.popup.hide{transform:translateX(-340px);opacity:0}
 .popup::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
 .popup.type-analysis::before{background:var(--accent)}
 .popup.type-trade::before{background:var(--bull)}
@@ -288,7 +288,10 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
         <div style="font-size:.52rem;letter-spacing:.15em;color:var(--muted);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">ACCOUNT</div>
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div style="font-size:.62rem;color:var(--text)">Logged in as <span style="color:var(--accent);font-weight:700" id="settingsUser2"></span></div>
-          <button onclick="doLogout()" style="background:rgba(122,122,120,.08);border:1px solid rgba(122,122,120,.3);color:var(--bear);font-family:var(--mono);font-size:.55rem;padding:6px 12px;border-radius:3px;cursor:pointer">LOGOUT</button>
+          <div style="display:flex;gap:6px">
+            <button onclick="if(confirm('Clear session? This deletes your chat history and current trade.')){clearSavedSession();location.reload();}" style="background:rgba(168,153,104,.08);border:1px solid rgba(168,153,104,.4);color:var(--gold);font-family:var(--mono);font-size:.55rem;padding:6px 12px;border-radius:3px;cursor:pointer">CLEAR SESSION</button>
+            <button onclick="doLogout()" style="background:rgba(122,122,120,.08);border:1px solid rgba(122,122,120,.3);color:var(--bear);font-family:var(--mono);font-size:.55rem;padding:6px 12px;border-radius:3px;cursor:pointer">LOGOUT</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1464,6 +1467,73 @@ async function fetchBTCContext(){
 }
 
 
+// ── SESSION PERSISTENCE — survive page reloads ───────────────────────────────
+function saveSession(){
+  try{
+    const data={
+      chatHistory:S.chatHistory||[],
+      activeTrade:activeTrade||null,
+      watchedLevels:S.watchedLevels||[],
+      sessionStartedAt:S.sessionStartedAt||null,
+      lastSaved:Date.now(),
+    };
+    localStorage.setItem(`txyz_session_${apexUser}`,JSON.stringify(data));
+  }catch(e){}
+}
+
+function loadSession(){
+  try{
+    const raw=localStorage.getItem(`txyz_session_${apexUser}`);
+    if(!raw)return null;
+    const data=JSON.parse(raw);
+    if(data.lastSaved&&Date.now()-data.lastSaved>8*60*60*1000)return null;
+    return data;
+  }catch(e){return null;}
+}
+
+function restoreSession(){
+  const data=loadSession();
+  if(!data)return false;
+  if(data.chatHistory&&data.chatHistory.length){
+    S.chatHistory=data.chatHistory;
+    const chatEl=document.getElementById('chatMessages');
+    if(chatEl){
+      const empty=chatEl.querySelector('.chat-empty');if(empty)empty.remove();
+      data.chatHistory.forEach(m=>{
+        if(m.content?.startsWith?.('[SYSTEM]'))return;
+        if(m.role==='user'){
+          if(m.content?.includes?.('just started monitoring'))return;
+          if(m.content?.includes?.('just updated. Look for'))return;
+          addMsgToChat(m.content,'user');
+        } else if(m.role==='assistant'){
+          const display=m.content.replace(/TRADE::(LONG|SHORT|NONE)[^\n]*/g,'').trim();
+          if(display)addMsgToChat(display,'agent');
+        }
+      });
+    }
+  }
+  if(data.sessionStartedAt)S.sessionStartedAt=data.sessionStartedAt;
+  if(data.watchedLevels)S.watchedLevels=data.watchedLevels;
+  if(data.activeTrade){
+    activeTrade=data.activeTrade;
+    setTimeout(()=>{
+      try{
+        updateTradeBox(activeTrade);
+        drawTradeLines(activeTrade);
+        log(`Restored ${activeTrade.dir} trade @ ${activeTrade.entry}`,'ok');
+      }catch(e){console.warn('restore trade error',e);}
+    },1500);
+  }
+  log('Previous session restored','ok');
+  return true;
+}
+
+function clearSavedSession(){
+  localStorage.removeItem(`txyz_session_${apexUser}`);
+}
+
+setInterval(()=>{if(S.running)saveSession();},5000);
+
 function getJournalKey(){return `txyz_journal_${apexUser}`;}
 function loadJournal(){
   try{return JSON.parse(localStorage.getItem(getJournalKey())||'[]');}catch(e){return [];}
@@ -1756,6 +1826,19 @@ function getH(k){
   return Math.max(180,Math.floor((window.innerHeight-240)/rows));
 }
 
+function positionPopupWrap(){
+  const chart=document.getElementById('chart-M15');
+  const wrap=document.getElementById('popupWrap');
+  if(!chart||!wrap)return;
+  const rect=chart.getBoundingClientRect();
+  wrap.style.top=(rect.top+8)+'px';
+  wrap.style.left=(rect.left+8)+'px';
+}
+
+window.addEventListener('resize',positionPopupWrap);
+window.addEventListener('scroll',positionPopupWrap);
+setInterval(positionPopupWrap,2000); // also reposition periodically in case of layout changes
+
 function initCharts(){
   const theme={
     layout:{background:{type:'solid',color:'#ffffff'},textColor:'#3a3a38'},
@@ -1805,6 +1888,8 @@ function initCharts(){
   // ── SYNCHRONIZED CROSSHAIR across 15M / 5M / 1M ──
   // when hovering one chart, set crosshair at same time in others
   syncCrosshairs();
+  // position popup notifications over 15M chart
+  setTimeout(positionPopupWrap,200);
 
   // drag-to-resize handles
   ['M15','M5','M1'].forEach(k=>{
@@ -2812,56 +2897,34 @@ function drawTradeLines(trade){
       drawLine(yTP,'rgba(90,120,80,0.85)',false);
       drawLine(ySL,'rgba(180,90,70,0.85)',false);
 
-      // ── ELEGANT FLOATING LABELS ──
-      // Each label is a small rounded pill on the right side of the chart
-      const drawLabel=(y,text,bg,fg,price)=>{
-        const labelW=58;
-        const labelH=18;
+      // ── COMPACT LABELS — text only, no price ──
+      const drawLabel=(y,text,bg,fg)=>{
+        const labelW=32;
+        const labelH=15;
         const x=boxW-labelW-4;
         const yTop=y-labelH/2;
-        // background pill
         const bgRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
         bgRect.setAttribute('x',x);bgRect.setAttribute('y',yTop);
         bgRect.setAttribute('width',labelW);bgRect.setAttribute('height',labelH);
-        bgRect.setAttribute('rx','3');bgRect.setAttribute('ry','3');
+        bgRect.setAttribute('rx','2');bgRect.setAttribute('ry','2');
         bgRect.setAttribute('fill',bg);
         svg.appendChild(bgRect);
-        // text — type
         const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
-        txt.setAttribute('x',x+7);txt.setAttribute('y',y+1);
+        txt.setAttribute('x',x+labelW/2);txt.setAttribute('y',y+1);
         txt.setAttribute('fill',fg);
         txt.setAttribute('font-family',"'JetBrains Mono', monospace");
         txt.setAttribute('font-size','9');
         txt.setAttribute('font-weight','700');
         txt.setAttribute('letter-spacing','0.5');
+        txt.setAttribute('text-anchor','middle');
         txt.setAttribute('dominant-baseline','middle');
         txt.textContent=text;
         svg.appendChild(txt);
-        // price small below type? — keep one line for cleanliness
-        const priceTxt=document.createElementNS('http://www.w3.org/2000/svg','text');
-        priceTxt.setAttribute('x',x+labelW-5);priceTxt.setAttribute('y',y+1);
-        priceTxt.setAttribute('fill',fg);
-        priceTxt.setAttribute('font-family',"'JetBrains Mono', monospace");
-        priceTxt.setAttribute('font-size','8.5');
-        priceTxt.setAttribute('font-weight','600');
-        priceTxt.setAttribute('text-anchor','end');
-        priceTxt.setAttribute('dominant-baseline','middle');
-        priceTxt.setAttribute('opacity','0.9');
-        priceTxt.textContent=price;
-        svg.appendChild(priceTxt);
       };
 
-      // format price compact
-      const fmt=(p)=>{
-        const n=parseFloat(p);
-        if(n>=1000)return n.toFixed(0);
-        if(n>=1)return n.toFixed(2);
-        return n.toFixed(4);
-      };
-
-      drawLabel(yEntry,'ENTRY','rgba(60,60,58,0.92)','#fafaf9',fmt(entry));
-      drawLabel(yTP,'TP','rgba(90,120,80,0.92)','#fafaf9',fmt(tp));
-      drawLabel(ySL,'SL','rgba(180,90,70,0.92)','#fafaf9',fmt(sl));
+      drawLabel(yEntry,'ENTRY','rgba(60,60,58,0.92)','#fafaf9');
+      drawLabel(yTP,'TP','rgba(90,120,80,0.92)','#fafaf9');
+      drawLabel(ySL,'SL','rgba(180,90,70,0.92)','#fafaf9');
 
       // ── R:R BADGE — top right corner, small ──
       const risk=Math.abs(entry-sl);
@@ -2969,6 +3032,7 @@ function onTradeClose(reason,hitPrice,isWin){
   speak(isWin?'Take profit hit':'Stop loss hit');
   sendTelegram(`${isWin?'✅':'❌'} <b>${reason}</b>\n\n${document.getElementById('pairSelect').value} closed @ ${hitPrice}`);
   updateJournalPanel();
+  saveSession(); // immediately save so closed trade isn't restored
 }
 
 function setBreakeven(){
@@ -3357,8 +3421,14 @@ async function startSession(){
     setAgentStatus('watching');
     document.getElementById('chatSend').disabled=false;
 
-    log('Running first analysis…','ok');
-    await runAnalysis(false);
+    // try to restore previous session — if it worked, skip the "first analysis" prompt
+    const restored=restoreSession();
+    if(!restored){
+      log('Running first analysis…','ok');
+      await runAnalysis(false);
+    } else {
+      log('Continuing previous session','ok');
+    }
 
     clearInterval(S.analysisTick);
     S.analysisTick=setInterval(()=>{if(S.running)runAnalysis(true);},120000);
