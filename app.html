@@ -940,7 +940,11 @@ function tgFormatTrade(trade){
   const pair=document.getElementById('pairSelect').value;
   const e=parseFloat(trade.entry),s=parseFloat(trade.sl),tp=parseFloat(trade.tp);
   const rr=(e&&s&&tp)?(Math.abs(tp-e)/Math.abs(e-s)).toFixed(2):'?';
-  return`<b>${arrow} ${pair}</b>\n\n<b>Entry:</b> ${trade.entry}\n<b>Stop Loss:</b> ${trade.sl}\n<b>Take Profit:</b> ${trade.tp}\n<b>R:R:</b> 1 : ${rr}\n\n<i>${new Date().toLocaleTimeString()}</i>`;
+  // setup info
+  const gradeIcon=trade.grade==='A+'?'🏆':trade.grade==='Turtle A'?'🐢':trade.grade==='A'?'⚡':'';
+  const gradeLine=trade.grade?`\n<b>Setup:</b> ${gradeIcon} ${trade.grade}`:'';
+  const reasoningLine=trade.reasoning?`\n\n<i>${trade.reasoning}</i>`:'';
+  return`<b>${arrow} ${pair}</b>${gradeLine}\n\n<b>Entry:</b> ${trade.entry}\n<b>Stop Loss:</b> ${trade.sl}\n<b>Take Profit:</b> ${trade.tp}\n<b>R:R:</b> 1 : ${rr}${reasoningLine}\n\n<i>${new Date().toLocaleTimeString()}</i>`;
 }
 
 
@@ -2528,7 +2532,7 @@ function detectLiquiditySweeps(k,fresh){
     S.chatHistory=S.chatHistory||[];
     S.chatHistory.push({
       role:'user',
-      content:`[SYSTEM] BSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMaxHigh.toFixed(2)}). Now WAIT for 1M BOS down → 1M displacement → 1M FVG. Only enter when price retraces into that 1M FVG. NO 1M BOS = NO TRADE. SL beyond swept level. A+ setup if all conditions align with HTF SHORT bias.`
+      content:`[SYSTEM] BSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMaxHigh.toFixed(2)}). Evaluate the sweep QUALITY. Where is it relative to HTF? Premium/discount? At a 4H/1H FVG or OB? At equilibrium? If sweep is at a strong HTF reversal zone with HTF SHORT bias → A or A+ turtle soup setup, trade it even without full 1M BOS. If just mid-range sweep with no HTF context → TRADE::NONE (likely continuation). Grade and decide.`
     });
     showPopup(`💧 ${tfLabel} BSL ${o.price} swept`,'update',6000);
     sendTelegram(`💧 <b>BSL SWEPT</b>\n\n${tfLabel} BSL at ${o.price}\nPrice reached ${recentMaxHigh.toFixed(2)}\nPotential SHORT confirmation incoming.`);
@@ -2548,7 +2552,7 @@ function detectLiquiditySweeps(k,fresh){
     S.chatHistory=S.chatHistory||[];
     S.chatHistory.push({
       role:'user',
-      content:`[SYSTEM] SSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMinLow.toFixed(2)}). Now WAIT for 1M BOS up → 1M displacement → 1M FVG. Only enter when price retraces into that 1M FVG. NO 1M BOS = NO TRADE. SL beyond swept level. A+ setup if all conditions align with HTF LONG bias.`
+      content:`[SYSTEM] SSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMinLow.toFixed(2)}). Evaluate the sweep QUALITY. Where is it relative to HTF? Premium/discount? At a 4H/1H FVG or OB? At equilibrium? If sweep is at a strong HTF reversal zone with HTF LONG bias → A or A+ turtle soup setup, trade it even without full 1M BOS. If just mid-range sweep with no HTF context → TRADE::NONE (likely continuation). Grade and decide.`
     });
     showPopup(`💧 ${tfLabel} SSL ${o.price} swept`,'update',6000);
     sendTelegram(`💧 <b>SSL SWEPT</b>\n\n${tfLabel} SSL at ${o.price}\nPrice reached ${recentMinLow.toFixed(2)}\nPotential LONG confirmation incoming.`);
@@ -2907,32 +2911,75 @@ Use a hierarchy:
 ▌ STEP 4 — LTF ENTRY TRIGGER (5M for confirmation / 1M for timing)
 The 1M chart is CRITICAL — it shows the most precise entry triggers (sweep wicks, micro-FVG fills, micro-OB taps). Always check 1M FVGs, OBs, BSL/SSL and breakers BEFORE calling a trade — they tell you the exact moment to enter.
 
-🏆 A+ SETUP (HIGHEST PROBABILITY — prioritize this above all):
-**SWEEP → 1M BOS → 1M DISPLACEMENT → 1M FVG → ENTRY**
+🏆 SETUP GRADING (only trade A+ or A — never B-/C):
 
-The sweep can happen on ANY timeframe (BSL/SSL on 15M, 5M, or 1M) — higher TF sweeps are stronger:
-- **15M sweep** = strongest signal (institutional liquidity raid) — biggest moves follow
-- **5M sweep** = strong (intraday liquidity grab) — solid setups
-- **1M sweep** = micro-sweep (precise timing trigger) — fast scalps
+After a sweep, the trade quality depends on confluences. Grade your setup BEFORE calling TRADE::
 
-⚡ CRITICAL RULE — BOS, DISPLACEMENT and FVG must ALL be on the 1M chart, regardless of where the sweep happened:
+**A+ SETUP** (highest probability, full size):
+- **Sweep MUST coincide on 15M AND 5M** (same level swept on both timeframes — this is real institutional liquidity raid, not micro noise)
+- 1M BOS confirms reversal
+- 1M FVG forms on displacement
+- HTF bias (Daily/4H/1H) aligns
+- ≥2 of: liquidity target nearby, OB present, breaker present, SMT divergence, funding aligned
 
-Sequence:
-1. **Sweep** on ANY timeframe (15M/5M/1M) of BSL or SSL
-2. **1M BOS** — the 1M chart MUST close beyond a recent significant 1M swing in the reversal direction. This confirms the sweep was real and institutional flow has shifted. NO 1M BOS = NO TRADE.
-3. **1M Displacement** — strong impulsive 1M candle(s) immediately after the BOS, in the reversal direction.
-4. **1M FVG** — that displacement leaves a fresh Fair Value Gap on the 1M chart specifically.
-5. **Wait for retrace** of price INTO that 1M FVG.
-6. **Enter on the rejection** from the 1M FVG — this is the institutional re-entry zone.
+A 1M-only sweep CANNOT be A+ even with all other confluences present. 1M sweeps without 5M/15M confirmation are micro-grabs and max out as A grade.
 
-The sweep can be on a higher TF, but the confirmation chain (BOS → displacement → FVG → entry) is ALL on 1M. This is the timing precision that separates A+ from generic setups.
+**A SETUP** (very good, normal size):
+- Sweep on any TF (including 1M-only)
+- HTF bias clearly aligns
+- Either 1M BOS OR 1M FVG present (not both required)
+- ≥1 confluence: OB tap, FVG tap, breaker, SMT divergence
+- Strong reversal candle visible on 1M after sweep
 
-WITHOUT 1M BOS: skip the trade. The sweep alone is not enough — you need 1M structure to confirm the reversal.
+**B SETUP** (mediocre — DO NOT TRADE):
+- Sweep happened but no clear reversal yet
+- HTF mixed
+- No clear LTF structure shift
+- → Reply "TRADE::NONE — waiting for confirmation"
+
+**C SETUP** (skip):
+- Just sweep alone with no HTF context
+- Mid-range sweep (not at premium/discount extreme)
+- No reversal candle, no FVG, no OB
+- → Reply "TRADE::NONE — no HTF context, possible continuation"
+
+🐢 **TURTLE SOUP** (valid when HTF context is strong — grade as A or A+):
+A "turtle soup" is a sweep that fails and reverses. It's a TRAP for breakout traders, but a GIFT for ICT scalpers when the HTF context supports it. Evaluate the QUALITY of the sweep based on WHERE it happens:
+
+✅ HIGH-QUALITY TURTLE SOUP (worth trading even without 1M BOS yet):
+- Sweep at HTF premium (above 70%) for SHORT, or HTF discount (below 30%) for LONG
+- Sweep into a 4H or 1H FVG that has not been filled
+- Sweep into a 4H or 1H Order Block in HTF bias direction
+- Sweep that reaches a previous Daily/4H equilibrium (50% of range) and rejects
+- Sweep at a major HTF Breaker Block (failed swing now acting as resistance/support)
+- Sweep against weak prior structure (the swept high/low was a stop-run, not real demand/supply)
+
+❌ LOW-QUALITY SWEEP (skip):
+- Sweep at mid-range with no HTF level nearby
+- Sweep WITH HTF bias direction (just continuation, not reversal)
+- Sweep into an empty zone (no FVG, no OB, no equilibrium)
+- Multiple recent sweeps in same direction (range expanding, trend continuation)
+
+The KEY question: "If I were institutional money, would I reverse here?" Reverse points are at HTF imbalances (FVG, OB), at premium/discount extremes, at equilibrium levels — NOT in the middle of nowhere.
+
+⚠ COMMON MISTAKE TO AVOID:
+A sweep alone is NOT a trade signal. Look at WHERE the sweep happened relative to HTF structure:
+- 1M BOS in reversal direction
+- 1M reversal candle + immediate FVG
+- HTF level (FVG, OB, breaker) at the sweep point that aligns with bias
+- Strong displacement (large bodied candles) opposite to sweep direction
+
+If sweep happens but price keeps drifting in sweep direction → that was continuation, not reversal. Stand down.
 
 SL: beyond the swept liquidity level (where institutions would invalidate)
 TP: nearest opposing liquidity (any TF)
 
-In your message: "15M BSL swept + 1M BOS down + 1M FVG 84455-84470 = SHORT retrace setup" → call TRADE:: with 1M FVG entry.
+In your message: explicitly state grade. E.g.:
+- "A+ : 15M+5M BSL swept (84720 same level both TFs) + 1M BOS + 1M FVG 84455-84470 + HTF SHORT bias. SHORT 84462."
+- "A : 5M SSL swept, 1M reversal + 1M OB tap, HTF LONG bias. LONG 84380."
+- "A : 1M BSL micro-sweep + HTF SHORT + 1M FVG. SHORT 84510."
+- "Turtle A : BSL swept into 4H premium FVG, HTF SHORT, reversal candle. SHORT 84520."
+- "TRADE::NONE — mid-range sweep, no HTF level, watching."
 
 Wait for ONE of these in HTF bias direction:
 
@@ -3606,6 +3653,15 @@ function updateTradeBox(t,silent=false){
   else if(/OB|order block/i.test(lastAgentMsg))t.setupType='OB';
   else t.setupType='other';
 
+  // grade — extract A+/A/Turtle from message
+  if(/\bA\+/i.test(lastAgentMsg))t.grade='A+';
+  else if(/turtle/i.test(lastAgentMsg))t.grade='Turtle A';
+  else if(/\bA\b\s*[:\-]/.test(lastAgentMsg))t.grade='A';
+  else t.grade='';
+
+  // store the full reasoning (clean, no TRADE:: tag)
+  t.reasoning=lastAgentMsg.replace(/TRADE::(LONG|SHORT|NONE)[^\n]*/g,'').trim().slice(0,250);
+
   // tracking max drawdown / max profit during trade
   t.maxDrawdown=0;
   t.maxProfit=0;
@@ -3698,18 +3754,11 @@ function updateTradeConviction(m15,m5,m1){
 }
 
 async function updateConviction(){
-  if(!S.running||!S.candles.M15.length){
-    console.log('[CONV] skipped - running:',S.running,'candles:',S.candles.M15.length);
-    return;
-  }
+  if(!S.running||!S.candles.M15.length)return;
   const m15=buildCtx('M15'),m5=buildCtx('M5'),m1=buildCtx('M1');
-  if(!m15||!m5||!m1){
-    console.log('[CONV] skipped - ctx missing');
-    return;
-  }
+  if(!m15||!m5||!m1)return;
 
   const cv=calcConviction(m15,m5,m1);
-  console.log('[CONV] score:',cv.score,'/',cv.max,cv.label);
   const colors={HIGH:'#2a2a2a',MEDIUM:'#a89968',LOW:'#7a7a78'};
   const colorKey=cv.label.includes('HIGH')?'HIGH':cv.label.includes('MEDIUM')?'MEDIUM':'LOW';
   const color=colors[colorKey];
