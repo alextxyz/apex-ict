@@ -1949,6 +1949,8 @@ function syncCrosshairs(){
     });
   });
 }
+
+function connectWS(k){
   const pair=document.getElementById('pairSelect').value.toLowerCase();
   const interval=TF[k];
   const ws=new WebSocket(`wss://fstream.binance.com/ws/${pair}@kline_${interval}`);
