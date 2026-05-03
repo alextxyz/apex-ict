@@ -2394,9 +2394,6 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
     if(!swept)ssl.push({price:sl.price.toFixed(2),time:sl.time,strength:sl.strength});
   });
 
-  // debug — log counts each call
-  console.log('[EQLEVELS]',{candleCount:c.length,swingHighs:swingHighs.length,swingLows:swingLows.length,bsl:bsl.length,ssl:ssl.length,minMovePct,lb,bslPrices:bsl.slice(0,5).map(x=>x.price),sslPrices:ssl.slice(0,5).map(x=>x.price)});
-
   // dedupe near-equal prices, keep most RECENT first then by strength
   const lastClose=c[c.length-1].close;
   const dedupe=arr=>{
