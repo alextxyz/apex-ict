@@ -2517,10 +2517,10 @@ function pda(c){
 function buildCtx(k){
   const c=S.candles[k];if(!c||c.length<10)return null;
   // Per-TF tuning. Liquidity sources from M5 (the master TF for scalping) are then propagated to all charts.
-  const swingLb=k==='M1'?3:5;
+  const swingLb=k==='M1'?3:k==='M5'?4:5;
   const eqTol=k==='M1'?0.0005:0.001;
-  // looser significance — show meaningful swings without filtering everything out
-  const minMove=k==='M1'?0.0005:k==='M5'?0.001:0.002;
+  // looser thresholds — capture meaningful intraday swings without losing them to filter
+  const minMove=k==='M1'?0.0003:k==='M5'?0.0005:0.0015;
   const sw=swings(c,swingLb),eq=eqLevels(c,eqTol,swingLb,minMove),fg=fvgs(c),ob=obs(c),brk=breakers(c),pd=pda(c);
   return{
     last:c[c.length-1].close.toFixed(2),pd,
