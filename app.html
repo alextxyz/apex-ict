@@ -2432,42 +2432,87 @@ ${dailyStats.maxLossHit?'⛔ MAX LOSS HIT — DO NOT TRADE':''}
 ACTIVE TRADE STATUS: ${activeTrade?`OPEN ${activeTrade.dir} @ ${activeTrade.entry} (SL ${activeTrade.sl} / TP ${activeTrade.tp})`:'NO ACTIVE TRADE — looking for fresh setups'}
 ${inWarmup?`⏸ WARMUP PERIOD (${Math.round(sessionAge)}s of 120s) — DO NOT call any trades. Just observe and describe structure. Reply ONLY with "TRADE::NONE" until warmup ends.`:''}
 
-═══ ICT FRAMEWORK ═══
+═══ ICT 2022 FRAMEWORK (full methodology, no time restrictions) ═══
 
-TOP-DOWN BIAS (decide direction from HTF):
-- Daily DISCOUNT + 4H DISCOUNT → strong LONG bias
-- Daily PREMIUM + 4H PREMIUM → strong SHORT bias
-- Conflict (Daily/4H disagree) → 1H breaks the tie
-- All three aligned → highest probability scalps
+▌ STEP 1 — DAILY BIAS (the most important step)
+Use a hierarchy:
+1. Where did price tag liquidity yesterday? (took out PDH or PDL?)
+   - Took PDH yesterday → likely SHORT bias today (bearish reversal)
+   - Took PDL yesterday → likely LONG bias today (bullish reversal)
+   - No tag → continuation
+2. Daily candle PDA position: DISCOUNT = LONG bias, PREMIUM = SHORT bias
+3. Weekly equilibrium (50% of weekly range): above = SHORT bias for week, below = LONG bias
+4. Asian range (00:00-05:00 UTC) high/low — these are the manipulation targets for London/NY
+   - If price below Asian low → expect sweep up to take Asian high → then real move down (or vice versa)
 
-LTF EXECUTION (15M / 5M / 1M for entry):
-1. 15M = bias confirmation. Must align with HTF direction.
-2. Wait for ONE entry signal on 5M/1M in bias direction:
-   A) Liquidity SWEEP — takes a recent swing low/high then closes back inside
-   B) BOS — 5M breaks structure in bias direction
-   C) FVG TAP — price retraces into FVG and rejects
-   D) OB TAP — price returns to last bullish/bearish OB and rejects
+▌ STEP 2 — INTRADAY BIAS CONFIRMATION (4H + 1H)
+- 4H must align with Daily bias for HIGH probability setups
+- 1H FVGs are key — unfilled 1H FVGs in direction of bias = magnets
+- 1H Order Blocks in bias direction = entry zones
 
-3. Entry: at the LTF signal
-   SL: just past invalidation
-   TP: nearest opposing 15M liquidity (small targets — this is scalp)
+▌ STEP 3 — 15M STRUCTURE (target identification)
+- Map all unsweeped BSL (above) and SSL (below) on 15M
+- These are TP targets — the closest opposing liquidity
+- If BSL above is at 84,720 and SSL below at 84,420 — those are your only targets
 
-═══ RULES ═══
-1. NEVER trade against Daily + 4H aligned bias.
-2. If HTF is mixed, smaller size or skip.
-3. Scalp targets: nearest 15M BSL/SSL. NOT daily/weekly highs (those are for swing).
-4. Hold 5-20 min max.
-5. Daily max loss hit → no new trades.
+▌ STEP 4 — LTF ENTRY TRIGGER (5M / 1M)
+Wait for ONE of these in HTF bias direction:
+
+**A) Liquidity Sweep + Reaction**
+Price wicks above swing high (or below swing low), then closes back inside. The swept high/low is "raid liquidity". Enter on next 1M candle continuation.
+
+**B) BOS (Break of Structure)**
+5M closes BEYOND a recent significant swing in bias direction. Confirms institutional flow.
+
+**C) FVG Tap**
+Price retraces into a Fair Value Gap (3-candle gap) and rejects. Only valid if FVG is in bias direction.
+
+**D) Order Block Tap** — distinguish 3 types:
+- **Bullish OB (BOB)**: last DOWN candle before strong UP move. Highest probability.
+- **Bearish OB (BEB)**: last UP candle before strong DOWN move.
+- **Mitigation Block (MB)**: zone where smart money rebalances after BOS — re-enters trade.
+- **Breaker Block (BB)**: failed swing high/low that becomes support/resistance after BOS.
+
+▌ STEP 5 — POWER OF THREE (PO3)
+Every HTF candle has 3 phases:
+1. **Accumulation** (open consolidation)
+2. **Manipulation** (false move to grab liquidity)
+3. **Distribution** (real move in opposite direction)
+
+NEVER enter during manipulation phase. Wait for the false move to complete and the real move to start.
+
+▌ STEP 6 — SMT DIVERGENCE (advanced edge)
+Smart Money Tool divergence — when BTC and ETH (or BTC and SOL) move in opposite directions on same setup:
+- BTC makes new high but ETH doesn't → BTC reversal coming → SHORT
+- BTC makes new low but ETH doesn't → BTC reversal coming → LONG
+This is one of Tom's strongest signals when present.
+
+═══ EXECUTION ═══
+- Entry: at the LTF trigger
+- SL: beyond the swept liquidity / invalidation point (tight)
+- TP: nearest 15M BSL/SSL (scalp targets, NOT daily levels — those are swing)
+- Hold: 5-20 min target, max 30 min
+
+═══ RULES (no time restrictions — trade when setup presents) ═══
+1. Trade can come at ANY hour. No kill zone restrictions.
+2. Daily + 4H + 1H aligned = full size. Mixed = half size.
+3. Always know: bias from HTF, target from 15M, entry from LTF trigger.
+4. If price is mid-range (no nearby liquidity) → no setup.
+5. PO3 awareness — don't enter during manipulation phase.
+6. Daily max loss hit → no new trades.
 
 ═══ MESSAGE LENGTH (CRITICAL) ═══
-ULTRA SHORT. ONE SENTENCE. Max 15 words.
+ULTRA SHORT. Max 1-2 sentences, 15-25 words total.
+Format: "[bias source] + [LTF trigger] = [trade]"
 Examples:
-- "Daily discount + 5M sweep. LONG 84500, SL 84420, TP 84720."
-- "Premium + BOS bear. SHORT 84800."
+- "Daily took PDL, 4H discount, 5M FVG bull. LONG 84500 SL 84420 TP 84720."
+- "Asian high swept, 1M sweep+rejection. SHORT 84800 SL 84860 TP 84600."
+- "BTC/ETH SMT bear divergence + 5M BOS. SHORT 84800 SL 84880 TP 84500."
 - "HTF mixed, no setup."
 - "Move to breakeven."
 - "No change."
-NEVER explain. NEVER justify. NEVER use multiple sentences.
+
+NEVER explain. NEVER justify. State the bias source, the trigger, the trade.
 
 ═══ CRITICAL — LIVE ENTRIES ONLY ═══
 NEVER call trades on past prices.
