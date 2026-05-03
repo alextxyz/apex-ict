@@ -3259,7 +3259,7 @@ async function startSession(){
 
   S.running=true;
   S.sessionStartedAt=Date.now();
-  document.getElementById('stopBtn').style.display='';
+  const sb=document.getElementById('stopBtn');if(sb)sb.style.display='';
   document.getElementById('liveDot').className='dot live';
   document.getElementById('liveLabel').textContent='LIVE';
   document.getElementById('liveTag').style.display='';
@@ -3331,7 +3331,7 @@ function stopSession(){
   if(liquidationWS)try{liquidationWS.close();}catch(e){}
   S.watchedLevels=[];
   document.getElementById('livePriceWrap').style.display='none';
-  document.getElementById('stopBtn').style.display='none';
+  const sb2=document.getElementById('stopBtn');if(sb2)sb2.style.display='none';
   document.getElementById('liveDot').className='dot off';
   document.getElementById('liveLabel').textContent='OFFLINE';
   document.getElementById('liveTag').style.display='none';
