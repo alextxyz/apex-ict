@@ -1953,9 +1953,12 @@ function syncCrosshairs(){
 function connectWS(k){
   const pair=document.getElementById('pairSelect').value.toLowerCase();
   const interval=TF[k];
-  const ws=new WebSocket(`wss://fstream.binance.com/ws/${pair}@kline_${interval}`);
+  const url=`wss://fstream.binance.com/ws/${pair}@kline_${interval}`;
+  console.log('[WS '+k+'] connecting to', url);
+  const ws=new WebSocket(url);
 
   ws.onopen=()=>{
+    console.log('[WS '+k+'] OPEN');
     log(`WS ${k} connected`);
     S.wsLastMsg=S.wsLastMsg||{};
     S.wsLastMsg[k]=Date.now();
@@ -1964,12 +1967,12 @@ function connectWS(k){
   };
   ws.onmessage=(e)=>{
     try{
-      // DEBUG counter — log every 10 messages
       S.wsMsgCount[k]=(S.wsMsgCount[k]||0)+1;
+      if(S.wsMsgCount[k]===1)console.log('[WS '+k+'] FIRST MSG:', e.data.substring(0,100));
       if(S.wsMsgCount[k]%20===1){log(`WS ${k} msg #${S.wsMsgCount[k]}`);}
       const msg=JSON.parse(e.data);
       const kline=msg.k;
-      if(!kline)return;
+      if(!kline){console.log('[WS '+k+'] no kline in msg', msg);return;}
       const candle={
         time:Math.floor(kline.t/1000),
         open:parseFloat(kline.o),
@@ -1978,7 +1981,7 @@ function connectWS(k){
         close:parseFloat(kline.c),
       };
       const arr=S.candles[k];
-      if(!arr)return;
+      if(!arr){console.warn('[WS '+k+'] no candle array');return;}
       if(arr.length&&arr[arr.length-1].time===candle.time){
         arr[arr.length-1]=candle;
       } else if(candle.time>=(arr[arr.length-1]?.time||0)){
@@ -1999,8 +2002,9 @@ function connectWS(k){
     }
   };
 
-  ws.onerror=(e)=>log(`WS ${k} error`,'err');
-  ws.onclose=()=>{
+  ws.onerror=(e)=>{console.error('[WS '+k+'] ERROR', e);log(`WS ${k} error`,'err');};
+  ws.onclose=(e)=>{
+    console.log('[WS '+k+'] CLOSE code='+e.code+' reason='+e.reason+' wasClean='+e.wasClean);
     if(S.running){
       log(`WS ${k} reconnecting…`,'warn');
       setTimeout(()=>connectWS(k),2000);
