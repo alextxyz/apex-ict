@@ -2397,16 +2397,22 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
   // debug — log counts each call
   console.log('[EQLEVELS]',{candleCount:c.length,swingHighs:swingHighs.length,swingLows:swingLows.length,bsl:bsl.length,ssl:ssl.length,minMovePct,lb,bslPrices:bsl.slice(0,5).map(x=>x.price),sslPrices:ssl.slice(0,5).map(x=>x.price)});
 
-  // dedupe near-equal prices, keep STRONGEST (most significant) and most recent
+  // dedupe near-equal prices, keep most RECENT first then by strength
+  const lastClose=c[c.length-1].close;
   const dedupe=arr=>{
+    // first filter: only keep levels within ±2% of current price (realistic intraday targets)
+    const nearby=arr.filter(o=>{
+      const dist=Math.abs(parseFloat(o.price)-lastClose)/lastClose;
+      return dist<=0.02;
+    });
+    // sort by recency (newest first), then strength as tiebreak
+    nearby.sort((a,b)=>b.time-a.time||(b.strength||0)-(a.strength||0));
     const out=[];
-    // sort by strength desc, then by time desc
-    arr.sort((a,b)=>(b.strength||0)-(a.strength||0)||b.time-a.time);
-    arr.forEach(o=>{
+    nearby.forEach(o=>{
       const dup=out.find(x=>Math.abs(parseFloat(x.price)-parseFloat(o.price))/parseFloat(o.price)<tol);
       if(!dup)out.push(o);
     });
-    return out.slice(0,5);
+    return out.slice(0,6);
   };
 
   return{bsl:dedupe(bsl),ssl:dedupe(ssl)};
