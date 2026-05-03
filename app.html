@@ -2074,18 +2074,23 @@ function startPolling(k){
         };
         const arr=S.candles[k];
         if(!arr){console.warn(`[POLL ${k}] no candle array`);return;}
+        const lastTime=arr.length?arr[arr.length-1].time:0;
+        // skip candles older than what we already have
+        if(candle.time<lastTime)return;
+        // update array
         if(arr.length&&arr[arr.length-1].time===candle.time){
           arr[arr.length-1]=candle;
           updated=true;
-        } else if(candle.time>(arr[arr.length-1]?.time||0)){
+        } else if(candle.time>lastTime){
           arr.push(candle);
           if(arr.length>3500)arr.shift();
           updated=true;
         }
-        if(S.series[k]){
-          try{S.series[k].update(candle);}catch(e){console.warn(`[POLL ${k}] update error:`,e.message);}
-        } else {
-          console.warn(`[POLL ${k}] no series on chart`);
+        // ONLY update chart if this is the latest candle (not historical)
+        if(S.series[k]&&candle.time>=lastTime){
+          try{S.series[k].update(candle);}catch(e){
+            // silent — likely "cannot update oldest data" race condition
+          }
         }
       });
       const lastCandle=S.candles[k][S.candles[k].length-1];
