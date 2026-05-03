@@ -1968,7 +1968,14 @@ function connectWS(k){
   ws.onmessage=(e)=>{
     try{
       S.wsMsgCount[k]=(S.wsMsgCount[k]||0)+1;
-      if(S.wsMsgCount[k]===1)console.log('[WS '+k+'] FIRST MSG:', e.data.substring(0,100));
+      if(S.wsMsgCount[k]===1){
+        console.log('[WS '+k+'] FIRST MSG:', e.data.substring(0,100));
+        // WS now delivering — stop polling for this TF if it was active
+        if(pollingActive[k]){
+          log(`WS ${k} active — stopping polling`,'ok');
+          stopPolling(k);
+        }
+      }
       if(S.wsMsgCount[k]%20===1){log(`WS ${k} msg #${S.wsMsgCount[k]}`);}
       const msg=JSON.parse(e.data);
       const kline=msg.k;
@@ -2017,6 +2024,106 @@ function connectAllWS(){
   ['M15','M5','M1'].forEach(k=>connectWS(k));
   // start health monitor
   startWSHealthMonitor();
+  // also start REST polling fallback in case WS doesn't deliver messages
+  startPollingFallback();
+}
+
+// ── REST POLLING FALLBACK ──
+// If WebSocket doesn't receive messages within 8 seconds, fall back to polling.
+// Polls 1M every 2s, 5M every 4s, 15M every 8s.
+const pollingIntervals={};
+let pollingActive={M1:false,M5:false,M15:false};
+
+function startPollingFallback(){
+  // wait 8 seconds for WS to start delivering
+  setTimeout(()=>{
+    ['M15','M5','M1'].forEach(k=>{
+      const count=S.wsMsgCount?.[k]||0;
+      if(count===0){
+        log(`WS ${k} silent — switching to REST polling`,'warn');
+        startPolling(k);
+      }
+    });
+  },8000);
+}
+
+function startPolling(k){
+  if(pollingActive[k])return;
+  pollingActive[k]=true;
+  const intervals={M1:2000,M5:4000,M15:8000};
+  const tfMap={M1:'1m',M5:'5m',M15:'15m'};
+  const pair=document.getElementById('pairSelect').value;
+
+  const fetchLatest=async()=>{
+    if(!S.running||!pollingActive[k])return;
+    try{
+      // fetch only last 2 candles — enough to update current bar
+      const r=await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair}&interval=${tfMap[k]}&limit=2`);
+      const d=await r.json();
+      if(!Array.isArray(d)||!d.length)return;
+      d.forEach(kline=>{
+        const candle={
+          time:Math.floor(kline[0]/1000),
+          open:+kline[1],
+          high:+kline[2],
+          low:+kline[3],
+          close:+kline[4],
+        };
+        const arr=S.candles[k];
+        if(!arr)return;
+        if(arr.length&&arr[arr.length-1].time===candle.time){
+          arr[arr.length-1]=candle;
+        } else if(candle.time>(arr[arr.length-1]?.time||0)){
+          arr.push(candle);
+          if(arr.length>3500)arr.shift();
+        }
+        if(S.series[k]){
+          try{S.series[k].update(candle);}catch(e){}
+        }
+      });
+      const lastCandle=S.candles[k][S.candles[k].length-1];
+      if(lastCandle){
+        S.lastPrice=lastCandle.close;
+        // also update live price display since price WS may be down too
+        updateLivePriceFromPolling(lastCandle.close);
+      }
+      setMeta(k,S.candles[k]);
+      // also feed checkWatchedLevels
+      if(lastCandle)checkWatchedLevels(lastCandle.close);
+    }catch(err){
+      console.warn(`[POLL ${k}] error:`,err.message);
+    }
+  };
+
+  // immediate first call, then on interval
+  fetchLatest();
+  pollingIntervals[k]=setInterval(fetchLatest,intervals[k]);
+}
+
+function stopPolling(k){
+  if(pollingIntervals[k]){clearInterval(pollingIntervals[k]);pollingIntervals[k]=null;}
+  pollingActive[k]=false;
+}
+
+function stopAllPolling(){
+  Object.keys(pollingIntervals).forEach(k=>stopPolling(k));
+}
+
+let lastPollPrice=null;
+function updateLivePriceFromPolling(price){
+  // only update if we don't have ticker WS active (would be redundant)
+  if(price===lastPollPrice)return;
+  lastPollPrice=price;
+  const symEl=document.getElementById('livePriceSym');
+  const valEl=document.getElementById('livePriceVal');
+  const wrap=document.getElementById('livePriceWrap');
+  if(!valEl)return;
+  if(wrap)wrap.style.display='';
+  const pair=document.getElementById('pairSelect').value;
+  const sym=pair.replace('USDT','');
+  if(symEl)symEl.textContent=sym+'/USDT PERP';
+  const dec=price>1000?2:price>1?4:6;
+  valEl.textContent=price.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
 }
 
 // detect stalled WebSockets and force reconnect
@@ -2078,6 +2185,7 @@ function closeAllWS(){
   if(wsHealthInterval){clearInterval(wsHealthInterval);wsHealthInterval=null;}
   Object.values(S.ws).forEach(ws=>{try{ws?.close();}catch(e){}});
   S.ws={M15:null,M5:null,M1:null};
+  stopAllPolling();
 }
 
 // ── ICT STRUCTURE ─────────────────────────────────────────────────────────────
