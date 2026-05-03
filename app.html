@@ -2991,6 +2991,13 @@ Example: 1M Bull OB bottom=84200, top=84230 → entry at 84215 (the midpoint).
 🚨 TIMING RULE — when to ACTUALLY call the TRADE:: tag:
 DO NOT call TRADE:: as soon as you identify a CE level. The CE is the PLAN — but the trade only triggers when PRICE IS ACTUALLY AT (or within 0.05% of) the CE level.
 
+📍 ZONE DIRECTION RULE (fundamental):
+- For a **SHORT entry**, the entry zone (FVG/OB/Breaker) MUST be ABOVE the current price. You're waiting for price to retrace UP into a premium zone, then go down. A bearish FVG below current price is USELESS for a SHORT — price isn't going there to short, it's already past it.
+- For a **LONG entry**, the entry zone MUST be BELOW the current price. You're waiting for price to retrace DOWN into a discount zone, then go up. A bullish FVG above current price is USELESS for a LONG.
+- If you're considering a SHORT but the only zones available are below price → there's no valid entry. Reply "Waiting for retrace up to enter SHORT" with TRADE::NONE.
+- Same for LONG: if zones are all above price, wait for price to come down.
+- NEVER mention zones that are on the wrong side of price as candidate entries — they're irrelevant for the current trade direction.
+
 Workflow:
 1. Sweep happens → identify the FVG/OB created by displacement
 2. Calculate the CE (50% of zone)
