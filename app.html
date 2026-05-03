@@ -259,30 +259,6 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
         <div id="tgStatus" style="font-size:.52rem;margin-top:10px;display:none"></div>
       </div>
 
-      <!-- RISK MANAGEMENT -->
-      <div style="margin-bottom:20px">
-        <div style="font-size:.52rem;letter-spacing:.15em;color:var(--accent);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">RISK MANAGEMENT</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <div>
-            <div style="font-size:.5rem;color:var(--muted);margin-bottom:4px">CAPITAL ($)</div>
-            <input type="number" id="rmCapital" placeholder="10000" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.7rem;padding:6px 8px;border-radius:3px;outline:none">
-          </div>
-          <div>
-            <div style="font-size:.5rem;color:var(--muted);margin-bottom:4px">RISK PER TRADE (%)</div>
-            <input type="number" step="0.1" id="rmRisk" placeholder="1" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.7rem;padding:6px 8px;border-radius:3px;outline:none">
-          </div>
-          <div>
-            <div style="font-size:.5rem;color:var(--muted);margin-bottom:4px">DAILY GOAL ($)</div>
-            <input type="number" id="rmGoal" placeholder="200" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.7rem;padding:6px 8px;border-radius:3px;outline:none">
-          </div>
-          <div>
-            <div style="font-size:.5rem;color:var(--muted);margin-bottom:4px">DAILY MAX LOSS ($)</div>
-            <input type="number" id="rmMaxLoss" placeholder="300" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.7rem;padding:6px 8px;border-radius:3px;outline:none">
-          </div>
-        </div>
-        <button onclick="saveRiskSettings()" style="background:var(--s2);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:.55rem;letter-spacing:.1em;padding:7px 14px;border-radius:3px;cursor:pointer;font-weight:700">💾 SAVE RISK SETTINGS</button>
-      </div>
-
       <!-- account info -->
       <div>
         <div style="font-size:.52rem;letter-spacing:.15em;color:var(--muted);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">ACCOUNT</div>
@@ -439,10 +415,6 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
           <div class="trade-cell"><div class="trade-cell-lbl">TAKE PROFIT</div><div class="trade-cell-val tp" id="tradeTP">—</div></div>
         </div>
         <div class="rr-row"><span class="rr-lbl">RISK / REWARD</span><span class="rr-val" id="rrVal">—</span></div>
-        <div class="rr-row" id="positionSizeRow" style="display:none">
-          <span class="rr-lbl">POSITION SIZE</span>
-          <span style="font-family:var(--mono);font-size:.6rem"><span id="posSizeUSD" style="color:var(--accent)">—</span> · <span id="posSizeUnits" style="color:var(--text)">—</span></span>
-        </div>
 
         <!-- TRADE CONVICTION -->
         <div id="tradeConvSection" style="display:none;border-top:1px solid var(--border);padding:10px 12px">
@@ -707,11 +679,6 @@ function openSettings(){
   modal.style.display='flex';
   const current=localStorage.getItem(`txyz_ant_${apexUser}`)||'';
   document.getElementById('antKeyModal').value=current;
-  const r=getRiskSettings();
-  const cap=document.getElementById('rmCapital');if(cap)cap.value=r.capital;
-  const ri=document.getElementById('rmRisk');if(ri)ri.value=r.riskPct;
-  const go=document.getElementById('rmGoal');if(go)go.value=r.dailyGoal;
-  const ml=document.getElementById('rmMaxLoss');if(ml)ml.value=r.dailyMaxLoss;
   // load telegram
   const tg=getTelegramConfig();
   const tt=document.getElementById('tgToken');if(tt)tt.value=tg.token;
@@ -1062,65 +1029,53 @@ function getDailyStats(){
   const todayStart=new Date();todayStart.setHours(0,0,0,0);
   const todayTs=todayStart.getTime();
   const todayTrades=j.filter(t=>new Date(t.timestamp).getTime()>=todayTs);
-  const r=getRiskSettings();
-  let totalPnL=0;
+  let totalR=0;
   todayTrades.forEach(t=>{
-    const riskAmount=r.capital*(r.riskPct/100);
-    const pnlPct=parseFloat(t.pnlPct)||0;
-    // approximate $ P&L based on risk-equivalent
-    if(t.outcome==='TP'){
-      // win: assume R:R from trade
-      const rr=Math.abs(parseFloat(t.tp)-parseFloat(t.entry))/Math.abs(parseFloat(t.entry)-parseFloat(t.sl));
-      totalPnL+=riskAmount*rr;
-    } else if(t.outcome==='SL'){
-      totalPnL-=riskAmount;
-    } else {
-      // manual close — use pnlPct directly on position
-      const distance=Math.abs(parseFloat(t.entry)-parseFloat(t.sl));
-      const distancePct=distance/parseFloat(t.entry);
-      const positionUSD=riskAmount/distancePct;
-      totalPnL+=positionUSD*(pnlPct/100);
-    }
+    const r=parseFloat(t.rMultiple)||0;
+    totalR+=r;
   });
   return{
     trades:todayTrades.length,
     wins:todayTrades.filter(t=>t.outcome==='TP').length,
     losses:todayTrades.filter(t=>t.outcome==='SL').length,
-    pnl:totalPnL,
-    pnlPct:r.capital?(totalPnL/r.capital*100):0,
-    goalReached:totalPnL>=r.dailyGoal,
-    maxLossHit:totalPnL<=-r.dailyMaxLoss,
+    totalR,
+  };
+}
+
+function updateDailyPnL(){
+function getDailyStats(){
+  const j=loadJournal();
+  const todayStart=new Date();todayStart.setHours(0,0,0,0);
+  const todayTs=todayStart.getTime();
+  const todayTrades=j.filter(t=>new Date(t.timestamp).getTime()>=todayTs);
+  let totalR=0;
+  todayTrades.forEach(t=>{
+    const r=parseFloat(t.rMultiple)||0;
+    totalR+=r;
+  });
+  return{
+    trades:todayTrades.length,
+    wins:todayTrades.filter(t=>t.outcome==='TP').length,
+    losses:todayTrades.filter(t=>t.outcome==='SL').length,
+    totalR,
   };
 }
 
 function updateDailyPnL(){
   const stats=getDailyStats();
-  const r=getRiskSettings();
   const el=document.getElementById('dailyPnL');
   if(!el)return;
-  const isPos=stats.pnl>=0;
+  const isPos=stats.totalR>=0;
+  const rText=(isPos?'+':'')+stats.totalR.toFixed(2)+'R';
   el.innerHTML=`
     <div style="display:flex;align-items:center;gap:8px;font-size:.6rem;font-family:var(--mono)">
       <span style="color:var(--muted)">TODAY:</span>
-      <span style="color:${isPos?'var(--bull)':'var(--bear)'};font-weight:700;font-size:.75rem">${isPos?'+':''}$${stats.pnl.toFixed(0)}</span>
-      <span style="color:var(--muted)">·</span>
-      <span style="color:${isPos?'var(--bull)':'var(--bear)'}">${isPos?'+':''}${stats.pnlPct.toFixed(2)}%</span>
+      <span style="color:${isPos?'var(--bull)':'var(--bear)'};font-weight:700;font-size:.75rem">${rText}</span>
       <span style="color:var(--muted)">·</span>
       <span style="color:var(--text)">${stats.wins}W/${stats.losses}L</span>
+      <span style="color:var(--muted)">·</span>
+      <span style="color:var(--muted)">${stats.trades} trades</span>
     </div>`;
-  // alerts
-  if(stats.goalReached&&!localStorage.getItem(`txyz_goalalert_${new Date().toDateString()}`)){
-    localStorage.setItem(`txyz_goalalert_${new Date().toDateString()}`,'1');
-    showPopup(`🎯 Daily goal reached: $${stats.pnl.toFixed(0)}!`,'trade',10000);
-    speak('Daily goal reached');
-    sendTelegram(`🎯 <b>DAILY GOAL REACHED</b>\n\nP&L: +$${stats.pnl.toFixed(0)} (${stats.pnlPct.toFixed(2)}%)\n${stats.wins}W / ${stats.losses}L today\n\nConsider stopping for the day.`);
-  }
-  if(stats.maxLossHit&&!localStorage.getItem(`txyz_maxalert_${new Date().toDateString()}`)){
-    localStorage.setItem(`txyz_maxalert_${new Date().toDateString()}`,'1');
-    showPopup(`⛔ Daily max loss hit: $${stats.pnl.toFixed(0)} — STOP TRADING`,'alert',15000);
-    speak('Daily max loss reached. Stop trading.');
-    sendTelegram(`⛔ <b>MAX DAILY LOSS HIT</b>\n\nP&L: $${stats.pnl.toFixed(0)} (${stats.pnlPct.toFixed(2)}%)\n${stats.wins}W / ${stats.losses}L\n\nStop trading now. Come back tomorrow.`);
-  }
 }
 
 setInterval(updateDailyPnL,30000);
@@ -2426,6 +2381,54 @@ function buildCtx(k){
 
 // ── DRAW BSL/SSL LIQUIDITY LEVELS on M15 and M5 charts ───────────────────────
 const liquidityOverlays={};
+// track previously seen levels per timeframe so we can detect sweeps
+const prevLevels={M15:{bsl:[],ssl:[]},M5:{bsl:[],ssl:[]}};
+
+function detectLiquiditySweeps(k,fresh){
+  const prev=prevLevels[k];
+  if(!prev)return;
+  const sweptBSL=prev.bsl.filter(o=>!fresh.bsl.find(n=>n.price===o.price));
+  const sweptSSL=prev.ssl.filter(o=>!fresh.ssl.find(n=>n.price===o.price));
+
+  if(sweptBSL.length||sweptSSL.length){
+    const tfLabel=k==='M15'?'15M':'5M';
+    sweptBSL.forEach(o=>{
+      const msg=`💧 ${tfLabel} BSL ${o.price} swept`;
+      log(msg,'ok');
+      addTradeStatusIfActive(msg);
+      // tell agent in chat history so next analysis knows
+      S.chatHistory=S.chatHistory||[];
+      S.chatHistory.push({
+        role:'user',
+        content:`[SYSTEM] BSL liquidity at ${o.price} just swept on ${tfLabel}. This is a potential setup for SHORT confirmation if HTF bias agrees. Note for next analysis.`
+      });
+      showPopup(`💧 ${tfLabel} BSL ${o.price} swept`,'update',6000);
+      sendTelegram(`💧 <b>BSL SWEPT</b>\n\n${tfLabel} BSL at ${o.price}\nPotential SHORT confirmation incoming.`);
+    });
+    sweptSSL.forEach(o=>{
+      const msg=`💧 ${tfLabel} SSL ${o.price} swept`;
+      log(msg,'ok');
+      addTradeStatusIfActive(msg);
+      S.chatHistory=S.chatHistory||[];
+      S.chatHistory.push({
+        role:'user',
+        content:`[SYSTEM] SSL liquidity at ${o.price} just swept on ${tfLabel}. This is a potential setup for LONG confirmation if HTF bias agrees. Note for next analysis.`
+      });
+      showPopup(`💧 ${tfLabel} SSL ${o.price} swept`,'update',6000);
+      sendTelegram(`💧 <b>SSL SWEPT</b>\n\n${tfLabel} SSL at ${o.price}\nPotential LONG confirmation incoming.`);
+    });
+  }
+
+  // store new state for next comparison
+  prevLevels[k]={bsl:[...fresh.bsl],ssl:[...fresh.ssl]};
+}
+
+function addTradeStatusIfActive(msg){
+  if(activeTrade&&typeof addTradeStatus==='function'){
+    try{addTradeStatus(msg,'accent');}catch(e){}
+  }
+}
+
 function drawLiquidityLevels(){
   ['M15','M5'].forEach(k=>{
     const ctx=buildCtx(k);
@@ -2506,6 +2509,26 @@ function drawLiquidityLevels(){
     const timer=setInterval(redraw,1000);
     liquidityOverlays[k]={svg,timer,redraw};
   });
+
+  // sweep detection runs every 5 seconds — separately from chart redraw
+  if(!window._sweepDetectorRunning){
+    window._sweepDetectorRunning=true;
+    // wait 10s before first check to avoid initial-load false positives
+    setTimeout(()=>{
+      // initialize prev with current state (so we don't fire on first cycle)
+      ['M15','M5'].forEach(k=>{
+        const fresh=buildCtx(k);
+        if(fresh)prevLevels[k]={bsl:[...fresh.bsl],ssl:[...fresh.ssl]};
+      });
+      setInterval(()=>{
+        if(!S.running)return;
+        ['M15','M5'].forEach(k=>{
+          const fresh=buildCtx(k);
+          if(fresh)detectLiquiditySweeps(k,fresh);
+        });
+      },5000);
+    },10000);
+  }
 }
 
 function calcConviction(m15,m5,m1){
@@ -2636,7 +2659,7 @@ Weekly H/L: ${htfLevels.weeklyHi}/${htfLevels.weeklyLo}`:''}
 
 TIME: ${session.session} session${session.isWeekend?' (WEEKEND — low vol)':''}
 ${journal?`History: ${journal.winRate}% WR (${journal.wins}W/${journal.losses}L)`:''}
-TODAY: ${dailyStats.trades} trades | $${dailyStats.pnl.toFixed(0)}
+TODAY: ${dailyStats.trades} trades | ${dailyStats.totalR>=0?'+':''}${dailyStats.totalR.toFixed(2)}R | ${dailyStats.wins}W/${dailyStats.losses}L
 
 ACTIVE TRADE STATUS: ${activeTrade?`OPEN ${activeTrade.dir} @ ${activeTrade.entry} (SL ${activeTrade.sl} / TP ${activeTrade.tp})`:'NO ACTIVE TRADE — looking for fresh setups'}
 
@@ -3137,7 +3160,6 @@ function onTradeClose(reason,hitPrice,isWin){
   document.getElementById('tradeSL').textContent='—';
   document.getElementById('tradeTP').textContent='—';
   document.getElementById('rrVal').textContent='—';
-  const psr=document.getElementById('positionSizeRow');if(psr)psr.style.display='none';
   // notify
   const msg=`${reason} @ ${hitPrice}`;
   showPopup(msg,isWin?'trade':'alert',8000);
@@ -3323,12 +3345,6 @@ function updateTradeBox(t){
   document.getElementById('rrVal').textContent=(e&&s&&tp)?'1 : '+((Math.abs(tp-e)/Math.abs(e-s)).toFixed(2)):'—';
 
   // position size
-  const ps=calcPositionSize(e,s);
-  if(ps){
-    document.getElementById('positionSizeRow').style.display='';
-    document.getElementById('posSizeUSD').textContent='$'+ps.positionUSD;
-    document.getElementById('posSizeUnits').textContent=ps.positionUnits+' units · risk $'+ps.riskAmount;
-  }
   document.getElementById('tradeTime').textContent=' · '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
 
   drawTradeLines(t);
