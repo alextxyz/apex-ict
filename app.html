@@ -2341,7 +2341,7 @@ function swings(c,lb=3){
 // BSL = significant swing HIGH not yet taken out (price hasn't traded above it since formation)
 // SSL = significant swing LOW not yet taken out (price hasn't traded below it since formation)
 // We use a longer lookback (5 bars each side) to ignore micro-swings, and only keep levels still active.
-function eqLevels(c,tol=0.001,lb=5){
+function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
   if(!c||c.length<20)return{bsl:[],ssl:[]};
   const swingHighs=[];
   const swingLows=[];
@@ -2352,8 +2352,25 @@ function eqLevels(c,tol=0.001,lb=5){
     const window=c.slice(i-lb,i+lb+1);
     const isHigh=c[i].high===Math.max(...window.map(x=>x.high));
     const isLow=c[i].low===Math.min(...window.map(x=>x.low));
-    if(isHigh)swingHighs.push({price:c[i].high,time:c[i].time,idx:i});
-    if(isLow)swingLows.push({price:c[i].low,time:c[i].time,idx:i});
+    // SIGNIFICANCE FILTER: swing must have meaningful move on BOTH sides
+    if(isHigh){
+      const leftLow=Math.min(...c.slice(i-lb,i).map(x=>x.low));
+      const rightLow=Math.min(...c.slice(i+1,i+lb+1).map(x=>x.low));
+      const moveLeft=(c[i].high-leftLow)/c[i].high;
+      const moveRight=(c[i].high-rightLow)/c[i].high;
+      if(moveLeft>=minMovePct&&moveRight>=minMovePct){
+        swingHighs.push({price:c[i].high,time:c[i].time,idx:i,strength:Math.min(moveLeft,moveRight)});
+      }
+    }
+    if(isLow){
+      const leftHigh=Math.max(...c.slice(i-lb,i).map(x=>x.high));
+      const rightHigh=Math.max(...c.slice(i+1,i+lb+1).map(x=>x.high));
+      const moveLeft=(leftHigh-c[i].low)/c[i].low;
+      const moveRight=(rightHigh-c[i].low)/c[i].low;
+      if(moveLeft>=minMovePct&&moveRight>=minMovePct){
+        swingLows.push({price:c[i].low,time:c[i].time,idx:i,strength:Math.min(moveLeft,moveRight)});
+      }
+    }
   }
 
   // BSL: a swing high is liquidity if NO LATER candle has traded above it
@@ -2363,7 +2380,7 @@ function eqLevels(c,tol=0.001,lb=5){
     for(let j=sh.idx+1;j<c.length;j++){
       if(c[j].high>sh.price){swept=true;break;}
     }
-    if(!swept)bsl.push({price:sh.price.toFixed(2),time:sh.time});
+    if(!swept)bsl.push({price:sh.price.toFixed(2),time:sh.time,strength:sh.strength});
   });
 
   // SSL: swing low is liquidity if no LATER candle has traded below it
@@ -2373,18 +2390,19 @@ function eqLevels(c,tol=0.001,lb=5){
     for(let j=sl.idx+1;j<c.length;j++){
       if(c[j].low<sl.price){swept=true;break;}
     }
-    if(!swept)ssl.push({price:sl.price.toFixed(2),time:sl.time});
+    if(!swept)ssl.push({price:sl.price.toFixed(2),time:sl.time,strength:sl.strength});
   });
 
-  // dedupe near-equal prices and keep most recent significant ones
+  // dedupe near-equal prices, keep STRONGEST (most significant) and most recent
   const dedupe=arr=>{
     const out=[];
-    arr.sort((a,b)=>b.time-a.time); // newest first
+    // sort by strength desc, then by time desc
+    arr.sort((a,b)=>(b.strength||0)-(a.strength||0)||b.time-a.time);
     arr.forEach(o=>{
       const dup=out.find(x=>Math.abs(parseFloat(x.price)-parseFloat(o.price))/parseFloat(o.price)<tol);
       if(!dup)out.push(o);
     });
-    return out.slice(0,4); // keep top 4 most recent unique levels
+    return out.slice(0,3);
   };
 
   return{bsl:dedupe(bsl),ssl:dedupe(ssl)};
@@ -2498,10 +2516,14 @@ function pda(c){
 
 function buildCtx(k){
   const c=S.candles[k];if(!c||c.length<10)return null;
-  // 1M needs tighter swing detection (more noise) — use smaller lookback
-  const swingLb=k==='M1'?3:5;
-  const eqTol=k==='M1'?0.0005:0.001; // 1M: 0.05% tolerance
-  const sw=swings(c,swingLb),eq=eqLevels(c,eqTol,swingLb),fg=fvgs(c),ob=obs(c),brk=breakers(c),pd=pda(c);
+  // Per-TF tuning to capture only significant liquidity
+  // M1: lb=5 (was 3) + min 0.15% move required → only major intraday highs/lows
+  // M5: lb=5 + min 0.25% move → solid 5M swings
+  // M15: lb=5 + min 0.4% move → real institutional swings
+  const swingLb=k==='M1'?5:5;
+  const eqTol=k==='M1'?0.0005:0.001;
+  const minMove=k==='M1'?0.0015:k==='M5'?0.0025:0.004;
+  const sw=swings(c,swingLb),eq=eqLevels(c,eqTol,swingLb,minMove),fg=fvgs(c),ob=obs(c),brk=breakers(c),pd=pda(c);
   return{
     last:c[c.length-1].close.toFixed(2),pd,
     swHi:sw.hi.map(h=>h.toFixed(2)),swLo:sw.lo.map(l=>l.toFixed(2)),
@@ -2997,6 +3019,42 @@ DO NOT call TRADE:: as soon as you identify a CE level. The CE is the PLAN — b
 - If you're considering a SHORT but the only zones available are below price → there's no valid entry. Reply "Waiting for retrace up to enter SHORT" with TRADE::NONE.
 - Same for LONG: if zones are all above price, wait for price to come down.
 - NEVER mention zones that are on the wrong side of price as candidate entries — they're irrelevant for the current trade direction.
+
+🔥 DOUBLE FVG ARRAY RULE (high-conviction confluence — applies to all FVG setups):
+When two FVGs of OPPOSITE polarity stack at the same price area, that zone is reinforced and becomes a high-probability entry.
+
+Examples:
+- Price was DROPPING and left a Bearish FVG at 84400-84430. Then a sweep + reversal happens, price moves up, and a Bullish FVG forms at 84410-84440. The OVERLAP area (84410-84430) now has BOTH a bearish and bullish FVG = double FVG array. This is a STRONGER LONG entry zone than a single FVG.
+- Same logic in reverse: price RISES leaves Bullish FVG, then sweep reverses, dropping move leaves Bearish FVG at the same area = double array = stronger SHORT entry.
+
+When you spot a double FVG array:
+- Treat it as A or A+ confluence
+- Entry at CE (50%) of the OVERLAP region between the two FVGs
+- Mention "double FVG array" in your reasoning
+- This is one of ICT's strongest reversal confirmations because both buyers AND sellers were trapped in that zone
+
+🎯 HTF WICK CE RULE (key reversal observation — applies after impulsive entries):
+After you enter an impulsive trade (especially A setup without full BOS confirmation), pay close attention to pronounced WICKS on 5M and 15M that formed the liquidity zone you're trading.
+
+Why this matters:
+- A long wick on 5M/15M created a liquidity raid (took out highs/lows)
+- The CE (50%) of that wick is a key institutional level
+- VERY OFTEN: price will retrace to the CE of that HTF wick and reverse from there
+- This can create equal highs/lows WITHOUT breaking the wick's extreme — institutions love these clean liquidity setups
+
+Watch for:
+- Price approaching the CE of the 5M/15M wick that triggered the sweep
+- Price reaction at that CE (rejection, reversal candle, doji)
+- If price reverses from the wick CE → trade is at risk of reversal, consider taking partial profit or moving SL to breakeven
+- If price BREAKS the wick CE convincingly → trade has more room to run
+
+When monitoring an open trade:
+- Identify the HTF wick that created the entry zone
+- Calculate its CE
+- Track price action at that level: it's a frequent reversal pivot
+- Use "HTF wick CE [price] approaching — watch for reversal" alerts in your trade-management messages
+
+This is especially important on impulsive A setups where you didn't wait for full BOS confirmation — the HTF wick CE is your "smart money level" to watch for early exit signals.
 
 Workflow:
 1. Sweep happens → identify the FVG/OB created by displacement
