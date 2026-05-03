@@ -2380,6 +2380,115 @@ function buildCtx(k){
   };
 }
 
+// ── DRAW BSL/SSL LIQUIDITY LEVELS on M15 and M5 charts ───────────────────────
+const liquidityOverlays={};
+function drawLiquidityLevels(){
+  ['M15','M5'].forEach(k=>{
+    const ctx=buildCtx(k);
+    if(!ctx)return;
+    const chartEl=document.getElementById('chart-'+k);
+    const series=S.series[k];
+    if(!chartEl||!series)return;
+    chartEl.style.position='relative';
+
+    // remove old SVG overlay for this TF
+    if(liquidityOverlays[k]){
+      try{liquidityOverlays[k].svg.remove();clearInterval(liquidityOverlays[k].timer);}catch(e){}
+    }
+
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1';
+    chartEl.appendChild(svg);
+
+    function redraw(){
+      const w=chartEl.clientWidth;
+      const h=chartEl.clientHeight;
+      svg.setAttribute('width',w);
+      svg.setAttribute('height',h);
+      svg.innerHTML='';
+      const priceScaleW=72;
+      const lineEnd=Math.max(0,w-priceScaleW);
+
+      const fresh=buildCtx(k);
+      if(!fresh)return;
+
+      // draw BSL — blueish/dark color, dashed
+      fresh.bsl.forEach(price=>{
+        const p=parseFloat(price);
+        const y=series.priceToCoordinate(p);
+        if(y==null)return;
+        // line
+        const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1',0);line.setAttribute('y1',y);
+        line.setAttribute('x2',lineEnd);line.setAttribute('y2',y);
+        line.setAttribute('stroke','rgba(70,90,140,0.55)');
+        line.setAttribute('stroke-width','1');
+        line.setAttribute('stroke-dasharray','4,3');
+        svg.appendChild(line);
+        // small label "BSL" on the right end (no price)
+        const labelW=26,labelH=13;
+        const x=lineEnd-labelW-2;
+        const yTop=y-labelH/2;
+        const bgRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+        bgRect.setAttribute('x',x);bgRect.setAttribute('y',yTop);
+        bgRect.setAttribute('width',labelW);bgRect.setAttribute('height',labelH);
+        bgRect.setAttribute('rx','2');bgRect.setAttribute('ry','2');
+        bgRect.setAttribute('fill','rgba(70,90,140,0.85)');
+        svg.appendChild(bgRect);
+        const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+        txt.setAttribute('x',x+labelW/2);txt.setAttribute('y',y+1);
+        txt.setAttribute('fill','#fafaf9');
+        txt.setAttribute('font-family',"'JetBrains Mono', monospace");
+        txt.setAttribute('font-size','8');
+        txt.setAttribute('font-weight','700');
+        txt.setAttribute('letter-spacing','0.3');
+        txt.setAttribute('text-anchor','middle');
+        txt.setAttribute('dominant-baseline','middle');
+        txt.textContent='BSL';
+        svg.appendChild(txt);
+      });
+
+      // draw SSL — purple/burgundy, dashed
+      fresh.ssl.forEach(price=>{
+        const p=parseFloat(price);
+        const y=series.priceToCoordinate(p);
+        if(y==null)return;
+        const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1',0);line.setAttribute('y1',y);
+        line.setAttribute('x2',lineEnd);line.setAttribute('y2',y);
+        line.setAttribute('stroke','rgba(140,80,110,0.55)');
+        line.setAttribute('stroke-width','1');
+        line.setAttribute('stroke-dasharray','4,3');
+        svg.appendChild(line);
+        const labelW=26,labelH=13;
+        const x=lineEnd-labelW-2;
+        const yTop=y-labelH/2;
+        const bgRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+        bgRect.setAttribute('x',x);bgRect.setAttribute('y',yTop);
+        bgRect.setAttribute('width',labelW);bgRect.setAttribute('height',labelH);
+        bgRect.setAttribute('rx','2');bgRect.setAttribute('ry','2');
+        bgRect.setAttribute('fill','rgba(140,80,110,0.85)');
+        svg.appendChild(bgRect);
+        const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+        txt.setAttribute('x',x+labelW/2);txt.setAttribute('y',y+1);
+        txt.setAttribute('fill','#fafaf9');
+        txt.setAttribute('font-family',"'JetBrains Mono', monospace");
+        txt.setAttribute('font-size','8');
+        txt.setAttribute('font-weight','700');
+        txt.setAttribute('letter-spacing','0.3');
+        txt.setAttribute('text-anchor','middle');
+        txt.setAttribute('dominant-baseline','middle');
+        txt.textContent='SSL';
+        svg.appendChild(txt);
+      });
+    }
+
+    redraw();
+    const timer=setInterval(redraw,1000);
+    liquidityOverlays[k]={svg,timer,redraw};
+  });
+}
+
 function calcConviction(m15,m5,m1){
   let score=0,reasons=[];
   if(m15.pd.pos==='DISCOUNT'||m15.pd.pos==='PREMIUM'){score++;reasons.push('PDA aligned ✓');}
@@ -2483,9 +2592,6 @@ function buildSystem(){
   const dailyStats=getDailyStats();
   const r=getRiskSettings();
   const d=htfStructure.daily,h4=htfStructure.h4,h1=htfStructure.h1;
-  // warmup — block trades in first 2 minutes after session start
-  const sessionAge=S.sessionStartedAt?(Date.now()-S.sessionStartedAt)/1000:9999;
-  const inWarmup=sessionAge<120;
 
   return`You are an ICT scalp analyst. Top-down framework: HTF dictates bias, LTF gives entry. Trader holds 5–20 min — fast scalps only.
 
@@ -2515,7 +2621,6 @@ TODAY: ${dailyStats.trades} trades | $${dailyStats.pnl.toFixed(0)}
 ${dailyStats.maxLossHit?'⛔ MAX LOSS HIT — DO NOT TRADE':''}
 
 ACTIVE TRADE STATUS: ${activeTrade?`OPEN ${activeTrade.dir} @ ${activeTrade.entry} (SL ${activeTrade.sl} / TP ${activeTrade.tp})`:'NO ACTIVE TRADE — looking for fresh setups'}
-${inWarmup?`⏸ WARMUP PERIOD (${Math.round(sessionAge)}s of 120s) — DO NOT call any trades. Just observe and describe structure. Reply ONLY with "TRADE::NONE" until warmup ends.`:''}
 
 ═══ ICT 2022 FRAMEWORK (full methodology, no time restrictions) ═══
 
@@ -2695,7 +2800,7 @@ async function runAnalysis(isAuto=false){
   S.marketContext=ctx;
   const isFirst=!prevCtx;
   const prompt=isFirst
-    ?`I just started monitoring ${document.getElementById('pairSelect').value}. Give me a brief structural read — HTF bias, current location in range, what to watch for. DO NOT call any trade on this first message — you've just connected and need at least a few minutes of observation. Reply ONLY with "TRADE::NONE" at the end. Max 2 sentences.`
+    ?`I just started monitoring ${document.getElementById('pairSelect').value}. Give me an immediate scalp read — HTF bias and any tradeable setup forming right now. If you see a valid setup, call it with TRADE::. Max 2 sentences.`
     :`${document.getElementById('pairSelect').value} just updated. Look for ANY new setup forming — sweep, BOS, FVG fill, OB tap. If you see ANY tradeable opportunity, call it with TRADE::. Otherwise reply ONLY with "No change." Max 2 sentences.`;
   S.chatHistory.push({role:'user',content:prompt});
   try{
@@ -2787,14 +2892,6 @@ function parseTrade(text){
   const m=text.match(/TRADE::(LONG|SHORT|NONE)\|?([0-9.]*)\|?([0-9.]*)\|?([0-9.]*)/);
   if(!m)return null;
   const trade={dir:m[1],entry:m[2],sl:m[3],tp:m[4]};
-  // BLOCK TRADES DURING WARMUP (first 2 minutes after session start)
-  if(trade.dir!=='NONE'){
-    const sessionAge=S.sessionStartedAt?(Date.now()-S.sessionStartedAt)/1000:9999;
-    if(sessionAge<120){
-      log(`⏸ Trade blocked — still in warmup (${Math.round(sessionAge)}s/120s)`,'warn');
-      return null;
-    }
-  }
   // VALIDATION — reject stale entry prices
   if(trade.dir!=='NONE'&&trade.entry&&S.lastPrice){
     const entry=parseFloat(trade.entry);
@@ -3434,9 +3531,13 @@ async function startSession(){
     S.analysisTick=setInterval(()=>{if(S.running)runAnalysis(true);},120000);
     startConvictionMonitor();
 
+    // draw BSL/SSL liquidity levels on charts and refresh every 30s
+    setTimeout(drawLiquidityLevels,800);
+    setInterval(()=>{if(S.running)drawLiquidityLevels();},30000);
+
     // multi-pair scanner every 5 min
     setInterval(scanOtherPairs,300000);
-    setTimeout(scanOtherPairs,30000); // first scan 30s after start
+    setTimeout(scanOtherPairs,30000);
 
   }catch(e){
     log('Startup error: '+e.message,'err');
