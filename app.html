@@ -73,7 +73,8 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .bar-countdown{font-size:clamp(.42rem,.5vw,.56rem);color:var(--gold);font-family:var(--mono);letter-spacing:.05em}
 .bar-countdown.urgent{color:var(--bear);animation:blink 1s infinite}
 .live-tag{font-size:clamp(.34rem,.4vw,.46rem);color:var(--bull);margin-left:5px;animation:pulse 2s infinite}
-.chart-body{flex:1;min-height:0;position:relative}
+.chart-body{flex:1;min-height:0;position:relative;cursor:crosshair}
+.chart-body canvas{cursor:crosshair}
 .resize-handle{height:5px;background:transparent;cursor:ns-resize;position:relative;z-index:10;transition:background .15s;flex-shrink:0}
 .resize-handle:hover{background:rgba(168,153,104,.25)}
 .resize-handle::after{content:'';position:absolute;left:50%;transform:translateX(-50%);top:1px;width:40px;height:3px;border-radius:2px;background:var(--border);transition:background .15s}
@@ -130,8 +131,8 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 
 /* POPUP */
 .popup-wrap{position:fixed;top:90px;left:24px;z-index:9999;display:flex;flex-direction:column;gap:6px;pointer-events:none;width:clamp(220px,18vw,300px)}
-.popup{background:rgba(255,255,255,.78);border:1px solid rgba(168,153,104,.35);border-radius:4px;padding:9px 11px;pointer-events:all;transform:translateX(-340px);opacity:0;transition:all .35s cubic-bezier(.175,.885,.32,1.275);position:relative;overflow:hidden;cursor:pointer;box-shadow:0 4px 20px rgba(40,40,38,.12),0 0 0 1px rgba(255,255,255,.4) inset;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.popup.show{transform:translateX(0);opacity:1}
+.popup{background:rgba(255,255,255,.7);border:1px solid rgba(168,153,104,.35);border-radius:4px;padding:9px 11px;pointer-events:all;transform:translateX(-340px);opacity:0;transition:all .35s cubic-bezier(.175,.885,.32,1.275);position:relative;overflow:hidden;cursor:pointer;box-shadow:0 4px 20px rgba(40,40,38,.12),0 0 0 1px rgba(255,255,255,.4) inset;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.popup.show{transform:translateX(0);opacity:.85}
 .popup.hide{transform:translateX(-340px);opacity:0}
 .popup::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
 .popup.type-analysis::before{background:var(--accent)}
