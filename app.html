@@ -6,6 +6,7 @@
 <title>TXYZ — Scalp</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 <script src="./lightweight-charts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -871,6 +872,63 @@ async function sendTelegram(text,configOverride){
     const d=await res.json();
     return d.ok===true;
   }catch(e){return false;}
+}
+
+// Send a screenshot (Blob) as photo to Telegram
+async function sendTelegramPhoto(blob,caption=''){
+  const tg=getTelegramConfig();
+  if(!tg.token||!tg.chatId||!blob)return false;
+  try{
+    const fd=new FormData();
+    fd.append('chat_id',tg.chatId);
+    fd.append('photo',blob,'chart.png');
+    if(caption){fd.append('caption',caption);fd.append('parse_mode','HTML');}
+    const res=await fetch(`https://api.telegram.org/bot${tg.token}/sendPhoto`,{
+      method:'POST',
+      body:fd,
+    });
+    const d=await res.json();
+    return d.ok===true;
+  }catch(e){console.warn('TG photo send failed:',e.message);return false;}
+}
+
+// Capture all 3 charts side-by-side as a single image, send to Telegram
+async function sendChartsToTelegram(caption=''){
+  if(typeof html2canvas==='undefined'){
+    console.warn('html2canvas not loaded yet');
+    return false;
+  }
+  try{
+    // grab the chart container that holds M15 + M5 + M1 panels
+    const chartArea=document.querySelector('.chart-grid')?.parentElement||document.querySelector('.chart-grid');
+    if(!chartArea){
+      console.warn('Chart area not found');
+      return false;
+    }
+    // wait a frame for any pending render
+    await new Promise(r=>requestAnimationFrame(r));
+    const canvas=await html2canvas(chartArea,{
+      backgroundColor:'#ffffff',
+      scale:1.4,         // upscale for legibility on phone
+      logging:false,
+      useCORS:true,
+      allowTaint:true,
+      onclone:(doc)=>{
+        // ensure SVG overlays render as part of the snapshot
+        doc.querySelectorAll('svg').forEach(s=>{
+          s.setAttribute('width',s.clientWidth);
+          s.setAttribute('height',s.clientHeight);
+        });
+      },
+    });
+    // convert to blob (smaller and faster upload than dataURL)
+    const blob=await new Promise(res=>canvas.toBlob(res,'image/png',0.92));
+    if(!blob)return false;
+    return await sendTelegramPhoto(blob,caption);
+  }catch(e){
+    console.warn('Chart capture failed:',e.message);
+    return false;
+  }
 }
 
 // helper to format trade alert
@@ -3545,6 +3603,10 @@ function updateTradeBox(t){
   drawTradeLines(t);
   speak(`New ${isBull?'long':'short'} trade. Entry ${t.entry}`);
   sendTelegram(tgFormatTrade(t));
+  // send chart screenshot right after trade alert (wait briefly so the trade lines are drawn first)
+  setTimeout(()=>{
+    sendChartsToTelegram(`📸 ${t.dir} ${t.entry} — chart snapshot`);
+  },1500);
 }
 
 // ── CONVICTION MONITOR — updates every 30s, alerts on change ─────────────────
