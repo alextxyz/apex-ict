@@ -31,8 +31,8 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 /* HEADER */
 header{border-bottom:1px solid var(--border);padding:clamp(8px,.8vw,12px) 0;margin-bottom:clamp(8px,.8vw,12px)}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.logo{font-family:var(--display);font-weight:800;font-size:clamp(1rem,1.6vw,1.8rem);color:#fff;letter-spacing:-.02em}
-.logo em{color:var(--accent);font-style:normal}
+.logo{font-family:var(--display);font-weight:800;font-size:clamp(1rem,1.6vw,1.8rem);color:var(--text);letter-spacing:-.02em}
+.logo em{color:var(--gold);font-style:normal}
 .hright{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pill{display:flex;align-items:center;gap:5px;font-size:clamp(.44rem,.52vw,.6rem);letter-spacing:.1em;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:20px}
 .dot{width:5px;height:5px;border-radius:50%}
@@ -571,7 +571,8 @@ const TF={M15:'15m',M5:'5m',M1:'1m'};
 const TF_LABELS={M15:'15M',M5:'5M',M1:'1M'};
 
 // Top 20 for ticker
-const TICKER_PAIRS=['btcusdt','ethusdt','bnbusdt','solusdt','xrpusdt','adausdt','avaxusdt','dogeusdt','dotusdt','linkusdt','maticusdt','uniusdt','atomusdt','ltcusdt','bchusdt','algousdt','xlmusdt','icpusdt','filusdt','aptusdt'];
+// Top 15 cryptos by market cap (as of 2026)
+const TICKER_PAIRS=['btcusdt','ethusdt','xrpusdt','bnbusdt','solusdt','dogeusdt','adausdt','trxusdt','linkusdt','avaxusdt','suiusdt','xlmusdt','dotusdt','tonusdt','hbarusdt'];
 
 let tickerPos=0,tickerRAF=null,tickerPaused=false;
 
@@ -1776,8 +1777,20 @@ function initCharts(){
   const theme={
     layout:{background:{type:'solid',color:'#ffffff'},textColor:'#3a3a38'},
     grid:{vertLines:{color:'#f0eeec'},horzLines:{color:'#f0eeec'}},
-    rightPriceScale:{borderColor:'#e5e3e0'},
-    timeScale:{borderColor:'#e5e3e0',timeVisible:true,secondsVisible:false},
+    rightPriceScale:{
+      borderColor:'#e5e3e0',
+      autoScale:true,
+      scaleMargins:{top:0.15,bottom:0.15},
+    },
+    timeScale:{
+      borderColor:'#e5e3e0',
+      timeVisible:true,
+      secondsVisible:false,
+      rightOffset:30,
+      barSpacing:6,
+      fixLeftEdge:false,
+      lockVisibleTimeRangeOnResize:true,
+    },
     crosshair:{
       mode:0,
       vertLine:{color:'rgba(0,0,0,0.35)',width:1,style:1,labelBackgroundColor:'#1a1a1a'},
@@ -1911,7 +1924,15 @@ async function loadAllCandles(){
       const c=await fetchCandles(pair,TF[k],limits[k]);
       S.candles[k]=c;
       S.series[k].setData(c);
-      S.charts[k].timeScale().fitContent();
+      // show last ~120 bars with rightOffset preserved (last candle ~2/3 from right)
+      const visibleBars={M15:100,M5:120,M1:150};
+      const startIdx=Math.max(0,c.length-visibleBars[k]);
+      if(c.length>0){
+        S.charts[k].timeScale().setVisibleRange({
+          from:c[startIdx].time,
+          to:c[c.length-1].time+(c[c.length-1].time-c[c.length-2].time)*30, // extend 30 bars into "future"
+        });
+      }
       setMeta(k,c);
       log(`${TF_LABELS[k]} OK (${c.length} bars)`,'ok');
     }catch(e){log(`${TF_LABELS[k]} error: ${e.message}`,'err');}
@@ -2122,12 +2143,25 @@ function stopAllPolling(){
 }
 
 let lastPollPrice=null;
+let priceOpen24h=null;
+
+async function fetch24hOpen(){
+  const pair=document.getElementById('pairSelect').value;
+  try{
+    const r=await fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${pair}`);
+    const d=await r.json();
+    if(d&&d.openPrice)priceOpen24h=parseFloat(d.openPrice);
+  }catch(e){}
+}
+
+setInterval(fetch24hOpen,60000);
+
 function updateLivePriceFromPolling(price){
-  // only update if we don't have ticker WS active (would be redundant)
   if(price===lastPollPrice)return;
   lastPollPrice=price;
   const symEl=document.getElementById('livePriceSym');
   const valEl=document.getElementById('livePriceVal');
+  const chgEl=document.getElementById('livePriceChg');
   const wrap=document.getElementById('livePriceWrap');
   if(!valEl)return;
   if(wrap)wrap.style.display='';
@@ -2136,6 +2170,13 @@ function updateLivePriceFromPolling(price){
   if(symEl)symEl.textContent=sym+'/USDT PERP';
   const dec=price>1000?2:price>1?4:6;
   valEl.textContent=price.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+  // 24h change
+  if(chgEl&&priceOpen24h){
+    const chg=((price-priceOpen24h)/priceOpen24h)*100;
+    const up=chg>=0;
+    chgEl.textContent=(up?'▲ +':'▼ ')+Math.abs(chg).toFixed(2)+'%';
+    chgEl.className='live-price-chg '+(up?'up':'down');
+  }
 }
 
 // detect stalled WebSockets and force reconnect
@@ -3279,6 +3320,7 @@ async function startSession(){
     log('Connecting WebSocket streams…');
     connectAllWS();
     connectPriceWS();
+    fetch24hOpen();
 
     setAgentStatus('watching');
     document.getElementById('chatSend').disabled=false;
