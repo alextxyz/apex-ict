@@ -3086,9 +3086,10 @@ Smart Money Tool divergence — when BTC and ETH (or BTC and SOL) move in opposi
 This is one of Tom's strongest signals when present.
 
 ═══ EXECUTION ═══
-- Entry: at the LTF trigger
+- Entry: at the LTF trigger (CE of zone)
 - SL: beyond the swept liquidity / invalidation point (tight)
 - TP: nearest 15M BSL/SSL (scalp targets, NOT daily levels — those are swing)
+- **R:R MINIMUM 1:1 — NEVER call a trade where reward is less than risk**. Trades with R:R below 1 have negative expected value even at high win rate. If TP is too close to entry vs SL distance, skip the trade. Aim for 1:1.5 to 1:3 typically.
 - Hold: 5-20 min target, max 30 min
 
 ═══ RULES (no time restrictions — trade when setup presents) ═══
@@ -3097,6 +3098,7 @@ This is one of Tom's strongest signals when present.
 3. Always know: bias from HTF, target from 15M, entry from LTF trigger.
 4. If price is mid-range (no nearby liquidity) → no setup.
 5. PO3 awareness — don't enter during manipulation phase.
+6. **R:R below 1:1 = automatic TRADE::NONE**. Don't even propose it. The system will reject it.
 
 ═══ MESSAGE LENGTH (CRITICAL) ═══
 ULTRA SHORT. Max 1-2 sentences, 15-25 words total.
@@ -3359,6 +3361,22 @@ function parseTrade(text){
       log(`⚠ Agent gave entry ${entry} too far from live ${live.toFixed(2)} (${(distance*100).toFixed(3)}%) — rejected. Wait for price to reach CE first.`,'warn');
       addMsgToChat(`⚠ Trade rejected: entry ${entry} not close enough to live ${live.toFixed(2)}. Wait until price retraces to CE.`,'agent');
       return null;
+    }
+  }
+  // VALIDATION — reject trades with R:R below 1:1 (negative expected value)
+  if(trade.dir!=='NONE'&&trade.entry&&trade.sl&&trade.tp){
+    const e=parseFloat(trade.entry);
+    const s=parseFloat(trade.sl);
+    const t=parseFloat(trade.tp);
+    const risk=Math.abs(e-s);
+    const reward=Math.abs(t-e);
+    if(risk>0){
+      const rr=reward/risk;
+      if(rr<1){
+        log(`⚠ Trade rejected — R:R 1:${rr.toFixed(2)} below minimum 1:1 (risk ${risk.toFixed(2)} vs reward ${reward.toFixed(2)})`,'warn');
+        addMsgToChat(`⚠ Trade rejected: R:R 1:${rr.toFixed(2)} too low. Minimum is 1:1. Wait for setup with better target.`,'agent');
+        return null;
+      }
     }
   }
   return trade;
