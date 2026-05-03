@@ -169,6 +169,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 </style>
 </head>
 <body>
+<select id="pairSelect" style="display:none"><option value="BTCUSDT" selected>BTC/USDT</option></select>
 
 <!-- POPUPS -->
 <div class="popup-wrap" id="popupWrap"></div>
@@ -257,6 +258,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
         </div>
         <div id="tgStatus" style="font-size:.52rem;margin-top:10px;display:none"></div>
       </div>
+
       <!-- RISK MANAGEMENT -->
       <div style="margin-bottom:20px">
         <div style="font-size:.52rem;letter-spacing:.15em;color:var(--accent);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">RISK MANAGEMENT</div>
@@ -319,10 +321,6 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
     </div>
   </div>
 </header>
-
-<select id="pairSelect" style="display:none">
-  <option value="BTCUSDT" selected>BTC/USDT</option>
-</select>
 
 <div class="main-layout">
   <div>
@@ -1909,18 +1907,7 @@ async function loadAllCandles(){
       const c=await fetchCandles(pair,TF[k],limits[k]);
       S.candles[k]=c;
       S.series[k].setData(c);
-      // scroll so last candle sits at left of empty area (rightOffset:30 in theme handles spacing)
-      const visibleBars={M15:80,M5:100,M1:130};
-      S.charts[k].timeScale().applyOptions({rightOffset:30});
-      // set visible range to show the last N bars + 30 empty space on right
-      if(c.length>0){
-        const lastIdx=c.length-1;
-        const fromIdx=Math.max(0,lastIdx-visibleBars[k]);
-        S.charts[k].timeScale().setVisibleLogicalRange({
-          from:fromIdx,
-          to:lastIdx+30,
-        });
-      }
+      S.charts[k].timeScale().fitContent();
       setMeta(k,c);
       log(`${TF_LABELS[k]} OK (${c.length} bars)`,'ok');
     }catch(e){log(`${TF_LABELS[k]} error: ${e.message}`,'err');}
