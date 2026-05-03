@@ -1043,25 +1043,6 @@ function getDailyStats(){
 }
 
 function updateDailyPnL(){
-function getDailyStats(){
-  const j=loadJournal();
-  const todayStart=new Date();todayStart.setHours(0,0,0,0);
-  const todayTs=todayStart.getTime();
-  const todayTrades=j.filter(t=>new Date(t.timestamp).getTime()>=todayTs);
-  let totalR=0;
-  todayTrades.forEach(t=>{
-    const r=parseFloat(t.rMultiple)||0;
-    totalR+=r;
-  });
-  return{
-    trades:todayTrades.length,
-    wins:todayTrades.filter(t=>t.outcome==='TP').length,
-    losses:todayTrades.filter(t=>t.outcome==='SL').length,
-    totalR,
-  };
-}
-
-function updateDailyPnL(){
   const stats=getDailyStats();
   const el=document.getElementById('dailyPnL');
   if(!el)return;
