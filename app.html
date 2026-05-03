@@ -1719,10 +1719,16 @@ function extractLevelsFromText(text){
 
 async function loadTickerREST(){
   try{
-    const r=await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbols=['+TICKER_PAIRS.map(p=>`"${p.toUpperCase()}"`).join(',')+']');
+    const symList=JSON.stringify(TICKER_PAIRS.map(p=>p.toUpperCase()));
+    const r=await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr?symbols='+encodeURIComponent(symList));
     const data=await r.json();
     if(!Array.isArray(data))return;
-    const items=data.map(d=>{
+    // safety: filter to only the symbols we asked for, in our preferred order
+    const wanted=TICKER_PAIRS.map(p=>p.toUpperCase());
+    const byPair={};
+    data.forEach(d=>{byPair[d.symbol]=d;});
+    const ordered=wanted.map(s=>byPair[s]).filter(Boolean);
+    const items=ordered.map(d=>{
       const sym=d.symbol.replace('USDT','');
       const price=parseFloat(d.lastPrice);
       const chg=parseFloat(d.priceChangePercent);
