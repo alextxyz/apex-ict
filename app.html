@@ -2277,13 +2277,14 @@ function swings(c,lb=3){
 // BSL = significant swing HIGH not yet taken out (price hasn't traded above it since formation)
 // SSL = significant swing LOW not yet taken out (price hasn't traded below it since formation)
 // We use a longer lookback (5 bars each side) to ignore micro-swings, and only keep levels still active.
-function eqLevels(c,tol=0.001){
+function eqLevels(c,tol=0.001,lb=5){
   if(!c||c.length<20)return{bsl:[],ssl:[]};
-  const lb=5; // strict: 5 candles each side = real swing point
-  const swingHighs=[]; // {price, time, idx}
+  const swingHighs=[];
   const swingLows=[];
 
-  for(let i=lb;i<c.length-lb;i++){
+  // only consider swings from the recent portion (last 60% of candles) for relevance
+  const startIdx=Math.max(lb,Math.floor(c.length*0.4));
+  for(let i=startIdx;i<c.length-lb;i++){
     const window=c.slice(i-lb,i+lb+1);
     const isHigh=c[i].high===Math.max(...window.map(x=>x.high));
     const isLow=c[i].low===Math.min(...window.map(x=>x.low));
@@ -2356,21 +2357,51 @@ function obs(c){
   const out=[];
   for(let i=1;i<c.length-1;i++){
     const cur=c[i],nxt=c[i+1];
-    if(cur.close<cur.open&&nxt.close>cur.high)out.push({type:'BULL',bot:cur.close.toFixed(2),top:cur.open.toFixed(2)});
-    if(cur.close>cur.open&&nxt.close<cur.low)out.push({type:'BEAR',bot:cur.open.toFixed(2),top:cur.close.toFixed(2)});
+    if(cur.close<cur.open&&nxt.close>cur.high){
+      out.push({type:'BULL',bot:cur.close,top:cur.open,time:cur.time,idx:i});
+    }
+    if(cur.close>cur.open&&nxt.close<cur.low){
+      out.push({type:'BEAR',bot:cur.open,top:cur.close,time:cur.time,idx:i});
+    }
   }
-  return out.slice(-3);
+  // unmitigated only — bull OB invalidated if a later candle closes below it; bear OB if closes above
+  const unmit=out.filter(o=>{
+    for(let j=o.idx+2;j<c.length;j++){
+      if(o.type==='BULL'&&c[j].close<parseFloat(o.bot))return false;
+      if(o.type==='BEAR'&&c[j].close>parseFloat(o.top))return false;
+    }
+    return true;
+  });
+  return unmit.slice(-3).map(o=>({
+    type:o.type,
+    bot:o.bot.toFixed(2),
+    top:o.top.toFixed(2),
+    time:o.time,
+    idx:o.idx,
+  }));
 }
+
 function breakers(c){
   const out=[];
   for(let i=4;i<c.length-1;i++){
     const cur=c[i],nxt=c[i+1];
     const pb=c.slice(i-4,i).find(x=>x.close<x.open);
-    if(pb&&cur.close<pb.low&&nxt.close>pb.open)out.push({type:'BULL',price:pb.open.toFixed(2)});
+    if(pb&&cur.close<pb.low&&nxt.close>pb.open){
+      out.push({type:'BULL',price:pb.open,bot:pb.low,top:pb.open,time:pb.time,idx:i});
+    }
     const pbb=c.slice(i-4,i).find(x=>x.close>x.open);
-    if(pbb&&cur.close>pbb.high&&nxt.close<pbb.close)out.push({type:'BEAR',price:pbb.close.toFixed(2)});
+    if(pbb&&cur.close>pbb.high&&nxt.close<pbb.close){
+      out.push({type:'BEAR',price:pbb.close,bot:pbb.close,top:pbb.high,time:pbb.time,idx:i});
+    }
   }
-  return out.slice(-2);
+  return out.slice(-2).map(b=>({
+    type:b.type,
+    price:b.price.toFixed(2),
+    bot:b.bot.toFixed(2),
+    top:b.top.toFixed(2),
+    time:b.time,
+    idx:b.idx,
+  }));
 }
 function pda(c){
   const last=c[c.length-1].close;
@@ -2381,15 +2412,20 @@ function pda(c){
 
 function buildCtx(k){
   const c=S.candles[k];if(!c||c.length<10)return null;
-  const sw=swings(c),eq=eqLevels(c),fg=fvgs(c),ob=obs(c),brk=breakers(c),pd=pda(c);
+  // 1M needs tighter swing detection (more noise) — use smaller lookback
+  const swingLb=k==='M1'?3:5;
+  const eqTol=k==='M1'?0.0005:0.001; // 1M: 0.05% tolerance
+  const sw=swings(c,swingLb),eq=eqLevels(c,eqTol,swingLb),fg=fvgs(c),ob=obs(c),brk=breakers(c),pd=pda(c);
   return{
     last:c[c.length-1].close.toFixed(2),pd,
     swHi:sw.hi.map(h=>h.toFixed(2)),swLo:sw.lo.map(l=>l.toFixed(2)),
     bsl:eq.bsl,ssl:eq.ssl,
     fvgs:fg.map(f=>`${f.type} FVG ${f.bot}-${f.top}`),
-    fvgsRaw:fg, // keep raw with time for drawing
+    fvgsRaw:fg,
     obs:ob.map(o=>`${o.type} OB ${o.bot}-${o.top}`),
+    obsRaw:ob,
     brk:brk.map(b=>`${b.type} BRK @${b.price}`),
+    brkRaw:brk,
   };
 }
 
@@ -2405,7 +2441,7 @@ function detectLiquiditySweeps(k,fresh){
   const sweptSSL=prev.ssl.filter(o=>!fresh.ssl.find(n=>n.price===o.price));
 
   if(sweptBSL.length||sweptSSL.length){
-    const tfLabel=k==='M15'?'15M':'5M';
+    const tfLabel=k==='M15'?'15M':k==='M5'?'5M':'1M';
     sweptBSL.forEach(o=>{
       const msg=`💧 ${tfLabel} BSL ${o.price} swept`;
       log(msg,'ok');
@@ -2444,7 +2480,7 @@ function addTradeStatusIfActive(msg){
 }
 
 function drawLiquidityLevels(){
-  ['M15','M5'].forEach(k=>{
+  ['M15','M5','M1'].forEach(k=>{
     const ctx=buildCtx(k);
     if(!ctx)return;
     const chartEl=document.getElementById('chart-'+k);
@@ -2513,33 +2549,81 @@ function drawLiquidityLevels(){
         svg.appendChild(txt);
       };
 
+      // M1 gets much higher transparency — visual hints not bold lines
+      const isM1=k==='M1';
+      const lineAlpha=isM1?0.25:0.7;
+      const labelAlpha=isM1?0.55:0.9;
+
       // BSL — solid blueish line
-      fresh.bsl.forEach(o=>drawLevel(o.price,o.time,'BSL','rgba(70,90,140,0.7)','rgba(70,90,140,0.9)'));
+      fresh.bsl.forEach(o=>drawLevel(o.price,o.time,'BSL',`rgba(70,90,140,${lineAlpha})`,`rgba(70,90,140,${labelAlpha})`));
       // SSL — solid burgundy line
-      fresh.ssl.forEach(o=>drawLevel(o.price,o.time,'SSL','rgba(140,80,110,0.7)','rgba(140,80,110,0.9)'));
+      fresh.ssl.forEach(o=>drawLevel(o.price,o.time,'SSL',`rgba(140,80,110,${lineAlpha})`,`rgba(140,80,110,${labelAlpha})`));
 
       // ── FVG BOXES ── unfilled gaps as translucent rectangles
+      const drawZoneBox=(top,bot,time,isBull,solid)=>{
+        const yTop=series.priceToCoordinate(parseFloat(top));
+        const yBot=series.priceToCoordinate(parseFloat(bot));
+        if(yTop==null||yBot==null)return;
+        let xStart=0;
+        if(time){
+          const tx=chart.timeScale().timeToCoordinate(time);
+          if(tx!=null&&tx>0)xStart=tx;
+        }
+        const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+        rect.setAttribute('x',xStart);
+        rect.setAttribute('y',Math.min(yTop,yBot));
+        rect.setAttribute('width',Math.max(0,lineEnd-xStart));
+        rect.setAttribute('height',Math.abs(yBot-yTop));
+        const fillA=isM1?0.08:0.18;
+        rect.setAttribute('fill',isBull?`rgba(120,150,90,${fillA})`:`rgba(170,100,90,${fillA})`);
+        svg.appendChild(rect);
+      };
+
+      // FVG — dashed box
       if(fresh.fvgsRaw){
-        fresh.fvgsRaw.forEach(g=>{
-          const yTop=series.priceToCoordinate(parseFloat(g.top));
-          const yBot=series.priceToCoordinate(parseFloat(g.bot));
+        fresh.fvgsRaw.forEach(g=>drawZoneBox(g.top,g.bot,g.time,g.type==='BULL',false));
+      }
+
+      // OB — solid box (more important, often deeper zone)
+      if(fresh.obsRaw){
+        fresh.obsRaw.forEach(o=>{
+          const yTop=series.priceToCoordinate(parseFloat(o.top));
+          const yBot=series.priceToCoordinate(parseFloat(o.bot));
           if(yTop==null||yBot==null)return;
           let xStart=0;
-          if(g.time){
-            const tx=chart.timeScale().timeToCoordinate(g.time);
+          if(o.time){
+            const tx=chart.timeScale().timeToCoordinate(o.time);
             if(tx!=null&&tx>0)xStart=tx;
           }
-          const isBull=g.type==='BULL';
-          // box from gap candle to right edge
+          const isBull=o.type==='BULL';
           const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
           rect.setAttribute('x',xStart);
           rect.setAttribute('y',Math.min(yTop,yBot));
           rect.setAttribute('width',Math.max(0,lineEnd-xStart));
           rect.setAttribute('height',Math.abs(yBot-yTop));
-          rect.setAttribute('fill',isBull?'rgba(120,150,90,0.13)':'rgba(170,100,90,0.13)');
-          rect.setAttribute('stroke',isBull?'rgba(120,150,90,0.55)':'rgba(170,100,90,0.55)');
-          rect.setAttribute('stroke-width','0.8');
-          rect.setAttribute('stroke-dasharray','2,2');
+          const obFill=isM1?0.1:0.22;
+          rect.setAttribute('fill',isBull?`rgba(80,130,170,${obFill})`:`rgba(180,130,80,${obFill})`);
+          svg.appendChild(rect);
+        });
+      }
+
+      // Breaker block — different color (purple-ish), strong border
+      if(fresh.brkRaw){
+        fresh.brkRaw.forEach(b=>{
+          const yTop=series.priceToCoordinate(parseFloat(b.top));
+          const yBot=series.priceToCoordinate(parseFloat(b.bot));
+          if(yTop==null||yBot==null)return;
+          let xStart=0;
+          if(b.time){
+            const tx=chart.timeScale().timeToCoordinate(b.time);
+            if(tx!=null&&tx>0)xStart=tx;
+          }
+          const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+          rect.setAttribute('x',xStart);
+          rect.setAttribute('y',Math.min(yTop,yBot));
+          rect.setAttribute('width',Math.max(0,lineEnd-xStart));
+          rect.setAttribute('height',Math.max(2,Math.abs(yBot-yTop)));
+          rect.setAttribute('fill',isM1?'rgba(140,100,160,0.08)':'rgba(140,100,160,0.18)');
           svg.appendChild(rect);
         });
       }
@@ -2658,9 +2742,9 @@ function buildMarketSummary(){
 ICT STRUCTURE — THESE LEVELS ARE DRAWN ON THE TRADER'S CHART (you must reference them):
 15M: price=${m15.last}|${m15.pd.pos} ${m15.pd.pct}%|SwHi:${m15.swHi.join(',')}|SwLo:${m15.swLo.join(',')}|BSL:${m15.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m15.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m15.fvgs.join('|')||'none'}|OB:${m15.obs.join('|')||'none'}
 5M: price=${m5.last}|${m5.pd.pos} ${m5.pd.pct}%|SwHi:${m5.swHi.join(',')}|SwLo:${m5.swLo.join(',')}|BSL:${m5.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m5.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m5.fvgs.join('|')||'none'}|OB:${m5.obs.join('|')||'none'}|BRK:${m5.brk.join('|')||'none'}
-1M: price=${m1.last}|${m1.pd.pos} ${m1.pd.pct}%|FVG:${m1.fvgs.join('|')||'none'}|OB:${m1.obs.join('|')||'none'}
+1M: price=${m1.last}|${m1.pd.pos} ${m1.pd.pct}%|BSL:${m1.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m1.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m1.fvgs.join('|')||'none'}|OB:${m1.obs.join('|')||'none'}|BRK:${m1.brk.join('|')||'none'}
 
-⚡ The trader SEES these BSL/SSL lines and FVG boxes on screen. When you reason, REFERENCE them by price (e.g. "price approaching 15M BSL 84720" or "5M FVG 84450-84480 untapped"). Use these levels as TP targets and entry zones. The chart visualization matches your data exactly.
+⚡ The trader SEES these BSL/SSL lines, FVG boxes, OB boxes and Breaker blocks DRAWN ON ALL 3 CHARTS (15M, 5M, 1M). When you reason, REFERENCE them by price (e.g. "price approaching 15M BSL 84720" or "1M FVG 84455-84470 untapped — entry zone"). Use 15M for bias, 5M for confirmation, 1M for the exact entry trigger.
 
 DERIVATIVES:
 ${d?`Funding: ${d.fundingRate}% — ${d.fundingBias} | OI: ${d.openInterest} | L/S: ${d.lsRatio} ${d.lsBias}`:'Derivatives data unavailable'}
@@ -2730,7 +2814,8 @@ Use a hierarchy:
 - These are TP targets — the closest opposing liquidity
 - If BSL above is at 84,720 and SSL below at 84,420 — those are your only targets
 
-▌ STEP 4 — LTF ENTRY TRIGGER (5M / 1M)
+▌ STEP 4 — LTF ENTRY TRIGGER (5M for confirmation / 1M for timing)
+The 1M chart is CRITICAL — it shows the most precise entry triggers (sweep wicks, micro-FVG fills, micro-OB taps). Always check 1M FVGs, OBs, BSL/SSL and breakers BEFORE calling a trade — they tell you the exact moment to enter.
 Wait for ONE of these in HTF bias direction:
 
 **A) Liquidity Sweep + Reaction**
