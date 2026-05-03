@@ -2408,8 +2408,19 @@ function fvgs(c){
     }
     return true;
   });
-  // return the most recent unfilled FVGs with original format for system prompt + raw for drawing
-  return unfilled.slice(-5).map(g=>({
+  // EQUILIBRIUM FILTER (ICT): bearish FVG must be in premium (mid of FVG >= 50% of range),
+  // bullish FVG must be in discount (mid of FVG <= 50%). Mid-range FVGs are noise, dropped.
+  const recent=c.slice(-50);
+  const rangeHi=Math.max(...recent.map(x=>x.high));
+  const rangeLo=Math.min(...recent.map(x=>x.low));
+  const equilibrium=(rangeHi+rangeLo)/2;
+  const inZone=unfilled.filter(g=>{
+    const mid=(parseFloat(g.bot)+parseFloat(g.top))/2;
+    if(g.type==='BEAR')return mid>=equilibrium; // bearish FVG only valid in premium (or at equilibrium)
+    if(g.type==='BULL')return mid<=equilibrium; // bullish FVG only valid in discount (or at equilibrium)
+    return false;
+  });
+  return inZone.slice(-5).map(g=>({
     type:g.type,
     bot:g.bot.toFixed(2),
     top:g.top.toFixed(2),
@@ -2436,7 +2447,18 @@ function obs(c){
     }
     return true;
   });
-  return unmit.slice(-3).map(o=>({
+  // EQUILIBRIUM FILTER: bearish OB must be in premium (>=50%), bullish OB in discount (<=50%)
+  const recent=c.slice(-50);
+  const rangeHi=Math.max(...recent.map(x=>x.high));
+  const rangeLo=Math.min(...recent.map(x=>x.low));
+  const equilibrium=(rangeHi+rangeLo)/2;
+  const inZone=unmit.filter(o=>{
+    const mid=(parseFloat(o.bot)+parseFloat(o.top))/2;
+    if(o.type==='BEAR')return mid>=equilibrium;
+    if(o.type==='BULL')return mid<=equilibrium;
+    return false;
+  });
+  return inZone.slice(-3).map(o=>({
     type:o.type,
     bot:o.bot.toFixed(2),
     top:o.top.toFixed(2),
@@ -2645,8 +2667,8 @@ function drawLiquidityLevels(){
 
       // M1 gets much higher transparency — visual hints not bold lines
       const isM1=k==='M1';
-      const lineAlpha=isM1?0.25:0.7;
-      const labelAlpha=isM1?0.55:0.9;
+      const lineAlpha=isM1?0.45:0.7;
+      const labelAlpha=isM1?0.75:0.9;
 
       // BSL — solid blueish line
       fresh.bsl.forEach(o=>drawLevel(o.price,o.time,'BSL',`rgba(70,90,140,${lineAlpha})`,`rgba(70,90,140,${labelAlpha})`));
@@ -2839,6 +2861,13 @@ ICT STRUCTURE — THESE LEVELS ARE DRAWN ON THE TRADER'S CHART (you must referen
 1M: price=${m1.last}|${m1.pd.pos} ${m1.pd.pct}%|BSL:${m1.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m1.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m1.fvgs.join('|')||'none'}|OB:${m1.obs.join('|')||'none'}|BRK:${m1.brk.join('|')||'none'}
 
 ⚡ The trader SEES these BSL/SSL lines, FVG boxes, OB boxes and Breaker blocks DRAWN ON ALL 3 CHARTS (15M, 5M, 1M). When you reason, REFERENCE them by price (e.g. "price approaching 15M BSL 84720" or "1M FVG 84455-84470 untapped — entry zone"). Use 15M for bias, 5M for confirmation, 1M for the exact entry trigger.
+
+📐 EQUILIBRIUM RULE (CRITICAL ICT FILTER):
+The drawn FVGs and OBs on charts are ALREADY pre-filtered: only those in the correct zone are shown.
+- **Bearish FVG / Bearish OB** → only valid in PREMIUM (>=50% of recent range, i.e. equilibrium or above). These are SHORT entry zones.
+- **Bullish FVG / Bullish OB** → only valid in DISCOUNT (<=50% of recent range, i.e. equilibrium or below). These are LONG entry zones.
+- Mid-range FVG/OB are FILTERED OUT (noise, false signals). What you see on screen is the institutional-grade pool.
+When you call a trade, mention WHERE the FVG/OB is positioned (premium / discount / equilibrium).
 
 DERIVATIVES:
 ${d?`Funding: ${d.fundingRate}% — ${d.fundingBias} | OI: ${d.openInterest} | L/S: ${d.lsRatio} ${d.lsBias}`:'Derivatives data unavailable'}
@@ -3319,128 +3348,168 @@ function drawTradeLines(trade){
   const tp=parseFloat(trade.tp);
   if(!entry||!sl||!tp)return;
 
-  ['M1','M5'].forEach(k=>{
-    const series=S.series[k];
-    const chart=S.charts[k];
-    if(!series||!chart)return;
+  // anchor to entry candle time — use saved time or current latest candle
+  const m1Candles=S.candles.M1;
+  const entryTime=trade.entryTime||(m1Candles&&m1Candles.length?m1Candles[m1Candles.length-1].time:Date.now()/1000);
+  if(!trade.entryTime)trade.entryTime=entryTime;
 
-    // SVG overlay for everything — full custom rendering
-    const chartEl=document.getElementById('chart-'+k);
-    if(!chartEl)return;
-    chartEl.style.position='relative';
-    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-    svg.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible';
-    chartEl.appendChild(svg);
+  // ONLY draw on the 1M chart
+  const k='M1';
+  const series=S.series[k];
+  const chart=S.charts[k];
+  if(!series||!chart)return;
+  const chartEl=document.getElementById('chart-'+k);
+  if(!chartEl)return;
+  chartEl.style.position='relative';
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible';
+  chartEl.appendChild(svg);
 
-    function redraw(){
-      const yEntry=series.priceToCoordinate(entry);
-      const ySL=series.priceToCoordinate(sl);
-      const yTP=series.priceToCoordinate(tp);
-      if(yEntry==null||ySL==null||yTP==null)return;
-      const w=chartEl.clientWidth;
-      const h=chartEl.clientHeight;
-      svg.setAttribute('width',w);
-      svg.setAttribute('height',h);
-      const priceScaleW=70;
-      const boxW=Math.max(0,w-priceScaleW);
-      svg.innerHTML='';
+  function redraw(){
+    const yEntry=series.priceToCoordinate(entry);
+    const ySL=series.priceToCoordinate(sl);
+    const yTP=series.priceToCoordinate(tp);
+    if(yEntry==null||ySL==null||yTP==null)return;
+    const w=chartEl.clientWidth;
+    const h=chartEl.clientHeight;
+    svg.setAttribute('width',w);
+    svg.setAttribute('height',h);
+    const priceScaleW=70;
+    const boxRight=Math.max(0,w-priceScaleW);
+    svg.innerHTML='';
 
-      // ── ZONES (filled gradients, very subtle) ──
-      // GREEN ZONE — entry to TP
-      const tpTop=Math.min(yEntry,yTP);
-      const tpH=Math.abs(yTP-yEntry);
-      const tpRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
-      tpRect.setAttribute('x',0);tpRect.setAttribute('y',tpTop);
-      tpRect.setAttribute('width',boxW);tpRect.setAttribute('height',tpH);
-      tpRect.setAttribute('fill','rgba(120,140,100,0.10)');
-      svg.appendChild(tpRect);
+    // anchor x-start to entry candle time
+    let xEntry=0;
+    const tx=chart.timeScale().timeToCoordinate(entryTime);
+    if(tx!=null&&tx>0)xEntry=tx;
 
-      // RED ZONE — entry to SL
-      const slTop=Math.min(yEntry,ySL);
-      const slH=Math.abs(ySL-yEntry);
-      const slRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
-      slRect.setAttribute('x',0);slRect.setAttribute('y',slTop);
-      slRect.setAttribute('width',boxW);slRect.setAttribute('height',slH);
-      slRect.setAttribute('fill','rgba(180,90,70,0.10)');
-      svg.appendChild(slRect);
+    // ── ZONES — start from entry candle, extend to right ──
+    // TP zone (green for long: above entry; for short: below entry... actually TP is always profit direction)
+    const tpTop=Math.min(yEntry,yTP);
+    const tpH=Math.abs(yTP-yEntry);
+    const tpRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    tpRect.setAttribute('x',xEntry);
+    tpRect.setAttribute('y',tpTop);
+    tpRect.setAttribute('width',Math.max(0,boxRight-xEntry));
+    tpRect.setAttribute('height',tpH);
+    tpRect.setAttribute('fill','rgba(90,140,80,0.14)');
+    svg.appendChild(tpRect);
 
-      // ── HORIZONTAL LINES ──
-      const drawLine=(y,color,dashed)=>{
-        const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1',0);line.setAttribute('y1',y);
-        line.setAttribute('x2',boxW);line.setAttribute('y2',y);
-        line.setAttribute('stroke',color);
-        line.setAttribute('stroke-width','1');
-        if(dashed)line.setAttribute('stroke-dasharray','3,3');
-        svg.appendChild(line);
-      };
-      drawLine(yEntry,'rgba(60,60,58,0.6)',true);
-      drawLine(yTP,'rgba(90,120,80,0.85)',false);
-      drawLine(ySL,'rgba(180,90,70,0.85)',false);
+    // SL zone (red)
+    const slTop=Math.min(yEntry,ySL);
+    const slH=Math.abs(ySL-yEntry);
+    const slRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    slRect.setAttribute('x',xEntry);
+    slRect.setAttribute('y',slTop);
+    slRect.setAttribute('width',Math.max(0,boxRight-xEntry));
+    slRect.setAttribute('height',slH);
+    slRect.setAttribute('fill','rgba(180,90,70,0.14)');
+    svg.appendChild(slRect);
 
-      // ── COMPACT LABELS — text only, no price ──
-      const drawLabel=(y,text,bg,fg)=>{
-        const labelW=32;
-        const labelH=15;
-        const x=boxW-labelW-4;
-        const yTop=y-labelH/2;
-        const bgRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
-        bgRect.setAttribute('x',x);bgRect.setAttribute('y',yTop);
-        bgRect.setAttribute('width',labelW);bgRect.setAttribute('height',labelH);
-        bgRect.setAttribute('rx','2');bgRect.setAttribute('ry','2');
-        bgRect.setAttribute('fill',bg);
-        svg.appendChild(bgRect);
-        const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
-        txt.setAttribute('x',x+labelW/2);txt.setAttribute('y',y+1);
-        txt.setAttribute('fill',fg);
-        txt.setAttribute('font-family',"'JetBrains Mono', monospace");
-        txt.setAttribute('font-size','9');
-        txt.setAttribute('font-weight','700');
-        txt.setAttribute('letter-spacing','0.5');
-        txt.setAttribute('text-anchor','middle');
-        txt.setAttribute('dominant-baseline','middle');
-        txt.textContent=text;
-        svg.appendChild(txt);
-      };
+    // ── HORIZONTAL LINES — from entry candle to right ──
+    const drawLine=(y,color,dashed)=>{
+      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',xEntry);line.setAttribute('y1',y);
+      line.setAttribute('x2',boxRight);line.setAttribute('y2',y);
+      line.setAttribute('stroke',color);
+      line.setAttribute('stroke-width','1');
+      if(dashed)line.setAttribute('stroke-dasharray','3,3');
+      svg.appendChild(line);
+    };
+    drawLine(yEntry,'rgba(60,60,58,0.7)',true);
+    drawLine(yTP,'rgba(90,140,80,0.9)',false);
+    drawLine(ySL,'rgba(180,90,70,0.9)',false);
 
-      drawLabel(yEntry,'ENTRY','rgba(60,60,58,0.92)','#fafaf9');
-      drawLabel(yTP,'TP','rgba(90,120,80,0.92)','#fafaf9');
-      drawLabel(ySL,'SL','rgba(180,90,70,0.92)','#fafaf9');
-
-      // ── R:R BADGE — top right corner, small ──
-      const risk=Math.abs(entry-sl);
-      const reward=Math.abs(tp-entry);
-      const rr=risk?(reward/risk).toFixed(1):'?';
-      const dirColor=isBull?'rgb(0,230,118)':'rgb(255,61,87)';
-      const dirBg=isBull?'rgba(42,42,42,0.15)':'rgba(122,122,120,0.15)';
-      const badgeText=`${trade.dir} · 1:${rr}R`;
-      const badgeW=Math.max(70,badgeText.length*5.5+12);
-      const badgeBg=document.createElementNS('http://www.w3.org/2000/svg','rect');
-      badgeBg.setAttribute('x',8);badgeBg.setAttribute('y',8);
-      badgeBg.setAttribute('width',badgeW);badgeBg.setAttribute('height',18);
-      badgeBg.setAttribute('rx','3');badgeBg.setAttribute('ry','3');
-      badgeBg.setAttribute('fill',dirBg);
-      badgeBg.setAttribute('stroke',dirColor);
-      badgeBg.setAttribute('stroke-width','0.5');
-      badgeBg.setAttribute('stroke-opacity','0.5');
-      svg.appendChild(badgeBg);
-      const badgeTxt=document.createElementNS('http://www.w3.org/2000/svg','text');
-      badgeTxt.setAttribute('x',8+badgeW/2);badgeTxt.setAttribute('y',18);
-      badgeTxt.setAttribute('fill',dirColor);
-      badgeTxt.setAttribute('font-family',"'JetBrains Mono', monospace");
-      badgeTxt.setAttribute('font-size','9');
-      badgeTxt.setAttribute('font-weight','700');
-      badgeTxt.setAttribute('letter-spacing','0.5');
-      badgeTxt.setAttribute('text-anchor','middle');
-      badgeTxt.setAttribute('dominant-baseline','middle');
-      badgeTxt.textContent=badgeText;
-      svg.appendChild(badgeTxt);
+    // ── ENTRY ARROW at entry candle ──
+    // For LONG: arrow pointing UP, below entry (green)
+    // For SHORT: arrow pointing DOWN, above entry (red)
+    const arrowColor=isBull?'rgb(70,140,80)':'rgb(180,80,70)';
+    const arrowSize=10;
+    const arrowX=xEntry;
+    const arrowY=isBull?yEntry+18:yEntry-18;
+    const arrow=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    if(isBull){
+      // up arrow ▲
+      arrow.setAttribute('points',`${arrowX},${arrowY-arrowSize} ${arrowX-arrowSize/1.5},${arrowY} ${arrowX+arrowSize/1.5},${arrowY}`);
+    } else {
+      // down arrow ▼
+      arrow.setAttribute('points',`${arrowX},${arrowY+arrowSize} ${arrowX-arrowSize/1.5},${arrowY} ${arrowX+arrowSize/1.5},${arrowY}`);
     }
+    arrow.setAttribute('fill',arrowColor);
+    arrow.setAttribute('stroke','#ffffff');
+    arrow.setAttribute('stroke-width','1');
+    svg.appendChild(arrow);
 
-    redraw();
-    const timer=setInterval(redraw,300);
-    tradeBoxOverlays.push({svg,timer,redraw});
-  });
+    // entry candle vertical marker — small line from entry price to arrow
+    const marker=document.createElementNS('http://www.w3.org/2000/svg','line');
+    marker.setAttribute('x1',xEntry);
+    marker.setAttribute('y1',yEntry);
+    marker.setAttribute('x2',xEntry);
+    marker.setAttribute('y2',arrowY);
+    marker.setAttribute('stroke',arrowColor);
+    marker.setAttribute('stroke-width','1.5');
+    svg.appendChild(marker);
+
+    // ── COMPACT LABELS at right edge ──
+    const drawLabel=(y,text,bg,fg)=>{
+      const labelW=32;
+      const labelH=15;
+      const x=boxRight-labelW-4;
+      const yTop=y-labelH/2;
+      const bgRect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      bgRect.setAttribute('x',x);bgRect.setAttribute('y',yTop);
+      bgRect.setAttribute('width',labelW);bgRect.setAttribute('height',labelH);
+      bgRect.setAttribute('rx','2');bgRect.setAttribute('ry','2');
+      bgRect.setAttribute('fill',bg);
+      svg.appendChild(bgRect);
+      const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('x',x+labelW/2);txt.setAttribute('y',y+1);
+      txt.setAttribute('fill',fg);
+      txt.setAttribute('font-family',"'JetBrains Mono', monospace");
+      txt.setAttribute('font-size','9');
+      txt.setAttribute('font-weight','700');
+      txt.setAttribute('letter-spacing','0.5');
+      txt.setAttribute('text-anchor','middle');
+      txt.setAttribute('dominant-baseline','middle');
+      txt.textContent=text;
+      svg.appendChild(txt);
+    };
+    drawLabel(yEntry,'ENTRY','rgba(60,60,58,0.92)','#fafaf9');
+    drawLabel(yTP,'TP','rgba(90,140,80,0.92)','#fafaf9');
+    drawLabel(ySL,'SL','rgba(180,90,70,0.92)','#fafaf9');
+
+    // ── R:R BADGE — top right ──
+    const risk=Math.abs(entry-sl);
+    const reward=Math.abs(tp-entry);
+    const rr=risk?(reward/risk).toFixed(1):'?';
+    const dirColor=isBull?'rgb(70,140,80)':'rgb(180,80,70)';
+    const dirBg=isBull?'rgba(90,140,80,0.12)':'rgba(180,90,70,0.12)';
+    const badgeText=`${trade.dir} · 1:${rr}R`;
+    const badgeW=Math.max(70,badgeText.length*5.5+12);
+    const badgeBg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    badgeBg.setAttribute('x',8);badgeBg.setAttribute('y',8);
+    badgeBg.setAttribute('width',badgeW);badgeBg.setAttribute('height',18);
+    badgeBg.setAttribute('rx','3');badgeBg.setAttribute('ry','3');
+    badgeBg.setAttribute('fill',dirBg);
+    badgeBg.setAttribute('stroke',dirColor);
+    badgeBg.setAttribute('stroke-width','0.6');
+    svg.appendChild(badgeBg);
+    const badgeTxt=document.createElementNS('http://www.w3.org/2000/svg','text');
+    badgeTxt.setAttribute('x',8+badgeW/2);badgeTxt.setAttribute('y',18);
+    badgeTxt.setAttribute('fill',dirColor);
+    badgeTxt.setAttribute('font-family',"'JetBrains Mono', monospace");
+    badgeTxt.setAttribute('font-size','9');
+    badgeTxt.setAttribute('font-weight','700');
+    badgeTxt.setAttribute('letter-spacing','0.5');
+    badgeTxt.setAttribute('text-anchor','middle');
+    badgeTxt.setAttribute('dominant-baseline','middle');
+    badgeTxt.textContent=badgeText;
+    svg.appendChild(badgeTxt);
+  }
+
+  redraw();
+  const timer=setInterval(redraw,300);
+  tradeBoxOverlays.push({svg,timer,redraw});
 
   clearInterval(tradeCheckInterval);
   tradeCheckInterval=setInterval(()=>{
