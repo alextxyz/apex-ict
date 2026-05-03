@@ -2492,42 +2492,72 @@ const liquidityOverlays={};
 // track previously seen levels per timeframe so we can detect sweeps
 const prevLevels={M15:{bsl:[],ssl:[]},M5:{bsl:[],ssl:[]},M1:{bsl:[],ssl:[]}};
 
+// track which levels we've already announced as swept, by TF + price (so we don't repeat)
+const announcedSweeps={M15:new Set(),M5:new Set(),M1:new Set()};
+
 function detectLiquiditySweeps(k,fresh){
   const prev=prevLevels[k];
   if(!prev)return;
-  const sweptBSL=prev.bsl.filter(o=>!fresh.bsl.find(n=>n.price===o.price));
-  const sweptSSL=prev.ssl.filter(o=>!fresh.ssl.find(n=>n.price===o.price));
+  const candles=S.candles[k];
+  if(!candles||!candles.length)return;
+  const lastPrice=candles[candles.length-1].close;
+  // only check the LAST 5 candles for a real sweep — we want a recent event, not historical
+  const recent=candles.slice(-5);
+  const recentMaxHigh=Math.max(...recent.map(c=>c.high));
+  const recentMinLow=Math.min(...recent.map(c=>c.low));
+  const tfLabel=k==='M15'?'15M':k==='M5'?'5M':'1M';
 
-  if(sweptBSL.length||sweptSSL.length){
-    const tfLabel=k==='M15'?'15M':k==='M5'?'5M':'1M';
-    sweptBSL.forEach(o=>{
-      const msg=`💧 ${tfLabel} BSL ${o.price} swept`;
-      log(msg,'ok');
-      addTradeStatusIfActive(msg);
-      // tell agent in chat history so next analysis knows
-      S.chatHistory=S.chatHistory||[];
-      S.chatHistory.push({
-        role:'user',
-        content:`[SYSTEM] BSL liquidity at ${o.price} just swept on ${tfLabel}. Watch for displacement + FVG creation immediately after — that FVG is a HIGH-PROBABILITY SHORT entry zone (A+ setup: sweep → reverse → FVG retrace). If HTF bias agrees, prioritize this trade.`
-      });
-      showPopup(`💧 ${tfLabel} BSL ${o.price} swept`,'update',6000);
-      sendTelegram(`💧 <b>BSL SWEPT</b>\n\n${tfLabel} BSL at ${o.price}\nPotential SHORT confirmation incoming.`);
+  // BSL is "swept" only if:
+  //  1) it was in our previous list (we knew about it)
+  //  2) it's NO LONGER in the fresh list (eqLevels filtered it out as "swept")
+  //  3) the recent candles ACTUALLY traded above the level price (real price action confirms it)
+  //  4) we haven't already announced this exact swept price for this TF
+  prev.bsl.forEach(o=>{
+    const stillThere=fresh.bsl.find(n=>n.price===o.price);
+    if(stillThere)return;
+    const sweptByPrice=recentMaxHigh>parseFloat(o.price);
+    if(!sweptByPrice)return;
+    const key=`bsl_${o.price}`;
+    if(announcedSweeps[k].has(key))return;
+    announcedSweeps[k].add(key);
+    const msg=`💧 ${tfLabel} BSL ${o.price} swept`;
+    log(msg,'ok');
+    addTradeStatusIfActive(msg);
+    S.chatHistory=S.chatHistory||[];
+    S.chatHistory.push({
+      role:'user',
+      content:`[SYSTEM] BSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMaxHigh.toFixed(2)}). Watch for displacement + FVG creation immediately after — that FVG is a HIGH-PROBABILITY SHORT entry zone (A+ setup). If HTF bias agrees, prioritize this trade.`
     });
-    sweptSSL.forEach(o=>{
-      const msg=`💧 ${tfLabel} SSL ${o.price} swept`;
-      log(msg,'ok');
-      addTradeStatusIfActive(msg);
-      S.chatHistory=S.chatHistory||[];
-      S.chatHistory.push({
-        role:'user',
-        content:`[SYSTEM] SSL liquidity at ${o.price} just swept on ${tfLabel}. Watch for displacement + FVG creation immediately after — that FVG is a HIGH-PROBABILITY LONG entry zone (A+ setup: sweep → reverse → FVG retrace). If HTF bias agrees, prioritize this trade.`
-      });
-      showPopup(`💧 ${tfLabel} SSL ${o.price} swept`,'update',6000);
-      sendTelegram(`💧 <b>SSL SWEPT</b>\n\n${tfLabel} SSL at ${o.price}\nPotential LONG confirmation incoming.`);
+    showPopup(`💧 ${tfLabel} BSL ${o.price} swept`,'update',6000);
+    sendTelegram(`💧 <b>BSL SWEPT</b>\n\n${tfLabel} BSL at ${o.price}\nPrice reached ${recentMaxHigh.toFixed(2)}\nPotential SHORT confirmation incoming.`);
+  });
+
+  prev.ssl.forEach(o=>{
+    const stillThere=fresh.ssl.find(n=>n.price===o.price);
+    if(stillThere)return;
+    const sweptByPrice=recentMinLow<parseFloat(o.price);
+    if(!sweptByPrice)return;
+    const key=`ssl_${o.price}`;
+    if(announcedSweeps[k].has(key))return;
+    announcedSweeps[k].add(key);
+    const msg=`💧 ${tfLabel} SSL ${o.price} swept`;
+    log(msg,'ok');
+    addTradeStatusIfActive(msg);
+    S.chatHistory=S.chatHistory||[];
+    S.chatHistory.push({
+      role:'user',
+      content:`[SYSTEM] SSL liquidity at ${o.price} just swept on ${tfLabel} (price reached ${recentMinLow.toFixed(2)}). Watch for displacement + FVG creation immediately after — that FVG is a HIGH-PROBABILITY LONG entry zone (A+ setup). If HTF bias agrees, prioritize this trade.`
     });
+    showPopup(`💧 ${tfLabel} SSL ${o.price} swept`,'update',6000);
+    sendTelegram(`💧 <b>SSL SWEPT</b>\n\n${tfLabel} SSL at ${o.price}\nPrice reached ${recentMinLow.toFixed(2)}\nPotential LONG confirmation incoming.`);
+  });
+
+  // limit memory of announced sweeps to last 30 per TF
+  if(announcedSweeps[k].size>30){
+    announcedSweeps[k]=new Set(Array.from(announcedSweeps[k]).slice(-20));
   }
 
-  // store new state for next comparison
+  // store fresh state for next comparison
   prevLevels[k]={bsl:[...fresh.bsl],ssl:[...fresh.ssl]};
 }
 
