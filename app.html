@@ -2950,15 +2950,43 @@ After a sweep, the trade quality depends on confluences. Grade your setup BEFORE
 - 1M FVG forms on displacement
 - HTF bias (Daily/4H/1H) aligns
 - ≥2 of: liquidity target nearby, OB present, breaker present, SMT divergence, funding aligned
+- ⚡ **Entry at 50% of the 1M FVG** (CE / Consequent Encroachment) — same rule as A setup. Optimal R:R.
 
 A 1M-only sweep CANNOT be A+ even with all other confluences present. 1M sweeps without 5M/15M confirmation are micro-grabs and max out as A grade.
 
-**A SETUP** (very good, normal size):
+**A SETUP** (very good but AGGRESSIVE — normal size, accept it's an impulsive entry):
 - Sweep on any TF (including 1M-only)
 - HTF bias clearly aligns
-- Either 1M BOS OR 1M FVG present (not both required)
+- 1M shows clear DISPLACEMENT (strong impulsive candles in reversal direction)
+- That displacement leaves a 1M FVG behind
+- ⚡ **Entry at 50% of the 1M FVG** (Consequent Encroachment / CE) — NOT at the far edge, NOT waiting for full rejection. The 50% line of the FVG is the optimal entry for best R:R.
 - ≥1 confluence: OB tap, FVG tap, breaker, SMT divergence
-- Strong reversal candle visible on 1M after sweep
+
+⚠ NOTE on A vs A+: The A setup skips the 1M BOS confirmation. You're entering on the displacement+FVG retrace BEFORE structure has officially broken. This is a faster, more aggressive entry — better R:R but lower confirmation than A+. Acceptable when HTF context is strong.
+
+The trade-off:
+- **A+** waits for full confirmation chain (sweep coincident 15M+5M → 1M BOS → 1M FVG retrace to 50%) — slower, higher win rate
+- **A** enters on displacement+FVG retrace to 50% without waiting for BOS — faster, slightly lower win rate but better entry price
+
+⚡ ENTRY RULE — CE (Consequent Encroachment) — APPLIES TO ALL SETUPS:
+For any zone-based entry (FVG, OB, Breaker, Mitigation Block, FVG inside OB), the optimal entry is at the **50% of the zone** (CE level), NEVER at the far edge or after rejection.
+
+Why CE over rejection:
+- Far-edge entry = you might miss the trade if price never tags the full extreme
+- Rejection entry = you've already given up the best R:R
+- 50% / CE = institutions consider the zone "rebalanced" here, the move continues from this point. Maximum room for the trade.
+
+Apply CE to:
+- **FVG** → entry at midpoint of FVG (e.g. FVG 84450-84480 → entry 84465)
+- **Order Block** → entry at midpoint of OB body (between OB top and OB bottom)
+- **Breaker Block** → entry at midpoint of breaker zone
+- **Mitigation Block** → entry at midpoint
+- **HTF Pool of liquidity** → CE of the broader zone
+
+If the zone is very small (under 5 ticks for BTC), enter at touch. If wider, always 50%.
+
+Example: 1M FVG bottom=84450, top=84480 → entry at 84465 (the midpoint).
+Example: 1M Bull OB bottom=84200, top=84230 → entry at 84215 (the midpoint).
 
 **B SETUP** (mediocre — DO NOT TRADE):
 - Sweep happened but no clear reversal yet
@@ -2973,7 +3001,9 @@ A 1M-only sweep CANNOT be A+ even with all other confluences present. 1M sweeps 
 - → Reply "TRADE::NONE — no HTF context, possible continuation"
 
 🐢 **TURTLE SOUP** (valid when HTF context is strong — grade as A or A+):
-A "turtle soup" is a sweep that fails and reverses. It's a TRAP for breakout traders, but a GIFT for ICT scalpers when the HTF context supports it. Evaluate the QUALITY of the sweep based on WHERE it happens:
+A "turtle soup" is a sweep that fails and reverses. It's a TRAP for breakout traders, but a GIFT for ICT scalpers when the HTF context supports it. Evaluate the QUALITY of the sweep based on WHERE it happens.
+
+⚡ Entry rule for turtle soup: enter at **50% of the HTF zone** (CE) where the sweep happened — e.g. if sweep into 4H FVG 84600-84720, entry at 84660. CE rule applies.
 
 ✅ HIGH-QUALITY TURTLE SOUP (worth trading even without 1M BOS yet):
 - Sweep at HTF premium (above 70%) for SHORT, or HTF discount (below 30%) for LONG
@@ -3004,28 +3034,28 @@ SL: beyond the swept liquidity level (where institutions would invalidate)
 TP: nearest opposing liquidity (any TF)
 
 In your message: explicitly state grade. E.g.:
-- "A+ : 15M+5M BSL swept (84720 same level both TFs) + 1M BOS + 1M FVG 84455-84470 + HTF SHORT bias. SHORT 84462."
-- "A : 5M SSL swept, 1M reversal + 1M OB tap, HTF LONG bias. LONG 84380."
-- "A : 1M BSL micro-sweep + HTF SHORT + 1M FVG. SHORT 84510."
-- "Turtle A : BSL swept into 4H premium FVG, HTF SHORT, reversal candle. SHORT 84520."
+- "A+ : 15M+5M BSL swept (84720 same level both TFs) + 1M BOS + 1M FVG 84455-84470 + HTF SHORT bias. SHORT 84462 (50% of FVG)."
+- "A : 5M SSL swept, 1M displacement up + 1M FVG 84370-84385 retrace, HTF LONG. LONG 84377 (CE of FVG)."
+- "A : 1M BSL swept + 1M displacement down + 1M FVG 84510-84525 retrace, HTF SHORT. SHORT 84517 (CE of FVG)."
+- "Turtle A : BSL swept into 4H premium FVG 84500-84580, HTF SHORT. SHORT 84540 (CE of 4H FVG)."
 - "TRADE::NONE — mid-range sweep, no HTF level, watching."
 
 Wait for ONE of these in HTF bias direction:
 
 **A) Liquidity Sweep + Reaction**
-Price wicks above swing high (or below swing low), then closes back inside. The swept high/low is "raid liquidity". Enter on next 1M candle continuation.
+Price wicks above swing high (or below swing low), then closes back inside. The swept high/low is "raid liquidity". Best practice: wait for the post-sweep displacement to leave a 1M FVG, then enter at 50% of that FVG (CE). If no FVG forms, enter at 50% of the OB created by the displacement candle. Only enter at the immediate next candle if no zone is formed (less optimal R:R).
 
 **B) BOS (Break of Structure)**
-5M closes BEYOND a recent significant swing in bias direction. Confirms institutional flow.
+5M closes BEYOND a recent significant swing in bias direction. Confirms institutional flow. Don't enter on the BOS itself — wait for retracement into the FVG/OB created by the BOS candle, then enter at 50% (CE).
 
 **C) FVG Tap**
-Price retraces into a Fair Value Gap (3-candle gap) and rejects. Only valid if FVG is in bias direction.
+Price retraces into a Fair Value Gap (3-candle gap). Enter at the 50% of the FVG (CE line), NOT at the far edge. Only valid if FVG is in bias direction and in correct zone (bull FVG in discount, bear FVG in premium).
 
-**D) Order Block Tap** — distinguish 3 types:
-- **Bullish OB (BOB)**: last DOWN candle before strong UP move. Highest probability.
-- **Bearish OB (BEB)**: last UP candle before strong DOWN move.
-- **Mitigation Block (MB)**: zone where smart money rebalances after BOS — re-enters trade.
-- **Breaker Block (BB)**: failed swing high/low that becomes support/resistance after BOS.
+**D) Order Block Tap** — enter at **50% of the OB body** (CE rule). Distinguish 4 types:
+- **Bullish OB (BOB)**: last DOWN candle before strong UP move. Highest probability. Entry at 50% of the OB.
+- **Bearish OB (BEB)**: last UP candle before strong DOWN move. Entry at 50%.
+- **Mitigation Block (MB)**: zone where smart money rebalances after BOS — re-enters trade. Entry at 50%.
+- **Breaker Block (BB)**: failed swing high/low that becomes support/resistance after BOS. Entry at 50%.
 
 ▌ STEP 5 — POWER OF THREE (PO3)
 Every HTF candle has 3 phases:
@@ -3369,7 +3399,14 @@ function drawTradeLines(trade){
     const yEntry=series.priceToCoordinate(entry);
     const ySL=series.priceToCoordinate(sl);
     const yTP=series.priceToCoordinate(tp);
-    if(yEntry==null||ySL==null||yTP==null)return;
+    if(yEntry==null||ySL==null||yTP==null){
+      if(!window._tradeDrawWarn){
+        window._tradeDrawWarn=true;
+        console.warn('[TRADE DRAW] price out of range — yEntry:',yEntry,'ySL:',ySL,'yTP:',yTP,'entry:',entry,'sl:',sl,'tp:',tp);
+      }
+      return;
+    }
+    window._tradeDrawWarn=false;
     const w=chartEl.clientWidth;
     const h=chartEl.clientHeight;
     svg.setAttribute('width',w);
@@ -3378,10 +3415,15 @@ function drawTradeLines(trade){
     const boxRight=Math.max(0,w-priceScaleW);
     svg.innerHTML='';
 
-    // anchor x-start to entry candle time
+    // anchor x-start to entry candle time. If entry candle is off-screen (left of visible area),
+    // start from x=0 so the box is still visible.
     let xEntry=0;
     const tx=chart.timeScale().timeToCoordinate(entryTime);
-    if(tx!=null&&tx>0)xEntry=tx;
+    if(tx!=null){
+      xEntry=Math.max(0,Math.min(boxRight-20,tx));
+    }
+    // log first time only for debug
+    if(!window._tradeXLogged){window._tradeXLogged=true;console.log('[TRADE DRAW] entryTime:',entryTime,'xEntry:',xEntry,'tx:',tx,'yEntry:',yEntry);}
 
     // ── ZONES — start from entry candle, extend to right ──
     // TP zone (green for long: above entry; for short: below entry... actually TP is always profit direction)
