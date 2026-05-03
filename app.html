@@ -320,24 +320,9 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
   </div>
 </header>
 
-<div class="cfg">
-  <div class="cfg-g">
-    <label>PAIR</label>
-    <select id="pairSelect">
-      <option value="BTCUSDT">BTC/USDT</option>
-      <option value="ETHUSDT">ETH/USDT</option>
-      <option value="SOLUSDT">SOL/USDT</option>
-      <option value="BNBUSDT">BNB/USDT</option>
-      <option value="XRPUSDT">XRP/USDT</option>
-      <option value="ADAUSDT">ADA/USDT</option>
-      <option value="AVAXUSDT">AVAX/USDT</option>
-      <option value="DOGEUSDT">DOGE/USDT</option>
-    </select>
-  </div>
-  <div style="display:flex;gap:6px;align-self:flex-end">
-    <button class="btn stop" id="stopBtn" onclick="stopSession()" style="display:none">■ STOP</button>
-  </div>
-</div>
+<select id="pairSelect" style="display:none">
+  <option value="BTCUSDT" selected>BTC/USDT</option>
+</select>
 
 <div class="main-layout">
   <div>
@@ -1924,13 +1909,16 @@ async function loadAllCandles(){
       const c=await fetchCandles(pair,TF[k],limits[k]);
       S.candles[k]=c;
       S.series[k].setData(c);
-      // show last ~120 bars with rightOffset preserved (last candle ~2/3 from right)
-      const visibleBars={M15:100,M5:120,M1:150};
-      const startIdx=Math.max(0,c.length-visibleBars[k]);
+      // scroll so last candle sits at left of empty area (rightOffset:30 in theme handles spacing)
+      const visibleBars={M15:80,M5:100,M1:130};
+      S.charts[k].timeScale().applyOptions({rightOffset:30});
+      // set visible range to show the last N bars + 30 empty space on right
       if(c.length>0){
-        S.charts[k].timeScale().setVisibleRange({
-          from:c[startIdx].time,
-          to:c[c.length-1].time+(c[c.length-1].time-c[c.length-2].time)*30, // extend 30 bars into "future"
+        const lastIdx=c.length-1;
+        const fromIdx=Math.max(0,lastIdx-visibleBars[k]);
+        S.charts[k].timeScale().setVisibleLogicalRange({
+          from:fromIdx,
+          to:lastIdx+30,
         });
       }
       setMeta(k,c);
