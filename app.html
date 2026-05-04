@@ -1516,11 +1516,13 @@ function restoreSession(){
   if(data.watchedLevels)S.watchedLevels=data.watchedLevels;
   if(data.activeTrade){
     activeTrade=data.activeTrade;
+    // mark trade as restored — block SL/TP triggers for 3 seconds while WS stabilizes
+    activeTrade._restoredAt=Date.now();
     setTimeout(()=>{
       try{
         updateTradeBox(activeTrade,true); // silent — no Telegram, no speech, no screenshot
         drawTradeLines(activeTrade);
-        log(`Restored ${activeTrade.dir} trade @ ${activeTrade.entry}`,'ok');
+        log(`Restored ${activeTrade.dir} trade @ ${activeTrade.entry} — grace period 3s active`,'ok');
       }catch(e){console.warn('restore trade error',e);}
     },1500);
   }
@@ -3675,6 +3677,9 @@ function drawTradeLines(trade){
   tradeCheckInterval=setInterval(()=>{
     const price=S.lastPrice;
     if(!price||!activeTrade)return;
+
+    // Grace period after session restore — give WS 3s to stabilize before triggering SL/TP
+    if(activeTrade._restoredAt&&Date.now()-activeTrade._restoredAt<3000)return;
 
     // ALWAYS read latest SL/TP from activeTrade (so breakeven moves are picked up)
     const liveSl=parseFloat(activeTrade.sl);
