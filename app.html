@@ -2493,9 +2493,13 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
   }
 
   // SECOND PASS — capture recent swings that don't have full right-lookback yet.
-  // For the last `lb` candles, accept as swing if they are the highest/lowest of the last (lb*2+1)
-  // candles AND have at least 1 candle after them confirming (i.e. not the most recent live candle).
-  const minRightConfirm=1;
+  // We require at least `minRightConfirm` candles AFTER the swing point so it has had time
+  // to be confirmed (not just the candle that's still mid-formation). Using lb-1 means:
+  //   1M (lb=3): need 2 candles after = 2 min stability
+  //   5M (lb=4): need 3 candles after = 15 min stability
+  //   15M (lb=5): need 4 candles after = 60 min stability
+  // This filters out "fresh wicks that just printed" while still catching genuinely recent swings.
+  const minRightConfirm=Math.max(2,lb-1);
   for(let i=Math.max(lb,c.length-lb);i<c.length-minRightConfirm;i++){
     const lookbackStart=Math.max(0,i-lb);
     const window=c.slice(lookbackStart,c.length); // includes everything from lb candles back to end
@@ -2507,6 +2511,7 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
     if(isHigh){
       // skip if already captured in first pass
       if(swingHighs.some(s=>s.idx===i))continue;
+      // also: ensure the swing is at least minMovePct above the local low to avoid noise
       const localLow=Math.min(...window.map(x=>x.low));
       const range=(c[i].high-localLow)/c[i].high;
       if(range>=minMovePct){
