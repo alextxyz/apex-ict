@@ -3569,11 +3569,14 @@ End with TRADE::NONE. Max 2 sentences.`;
     prompt=`${document.getElementById('pairSelect').value} just updated. ${liveLevels} Use ONLY these levels — any number you cite as BSL/SSL must be in the list. Look for sweep, BOS, FVG fill, OB tap. If you see ANY tradeable opportunity, call it with TRADE::. Otherwise reply ONLY with "No change." Max 2 sentences.`;
   }
   S.chatHistory.push({role:'user',content:prompt});
+  // when in trade-management mode, only send recent messages so agent doesn't
+  // fixate on stale levels from the original setup discussion
+  const sendHistory=activeTrade?S.chatHistory.slice(-6):S.chatHistory;
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':antKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:200,system:buildSystem(),messages:S.chatHistory}),
+      body:JSON.stringify({model:'claude-opus-4-5',max_tokens:200,system:buildSystem(),messages:sendHistory}),
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -3875,10 +3878,11 @@ function drawTradeLines(trade){
     // ── R:R BADGE — top right ──
     const risk=Math.abs(entry-sl);
     const reward=Math.abs(tp-entry);
-    const rr=risk?(reward/risk).toFixed(1):'?';
+    // when SL is at BE (risk=0), show 🔒 instead of "?R"
+    const rr=risk<0.5?'🔒':(reward/risk).toFixed(1);
     const dirColor=isBull?'rgb(70,140,80)':'rgb(180,80,70)';
     const dirBg=isBull?'rgba(90,140,80,0.12)':'rgba(180,90,70,0.12)';
-    const badgeText=`${trade.dir} · 1:${rr}R`;
+    const badgeText=risk<0.5?`${trade.dir} · 🔒 BE`:`${trade.dir} · 1:${rr}R`;
     const badgeW=Math.max(70,badgeText.length*5.5+12);
     const badgeBg=document.createElementNS('http://www.w3.org/2000/svg','rect');
     badgeBg.setAttribute('x',8);badgeBg.setAttribute('y',8);
@@ -4168,7 +4172,20 @@ function updateTradeBox(t,silent=false){
   document.getElementById('tradeSL').textContent=t.sl||'—';
   document.getElementById('tradeTP').textContent=t.tp||'—';
   const e=parseFloat(t.entry),s=parseFloat(t.sl),tp=parseFloat(t.tp);
-  document.getElementById('rrVal').textContent=(e&&s&&tp)?'1 : '+((Math.abs(tp-e)/Math.abs(e-s)).toFixed(2)):'—';
+  // R:R calculation — handle the case where SL is at BE (risk=0, reward=infinite)
+  const rrEl=document.getElementById('rrVal');
+  if(e&&s&&tp){
+    const risk=Math.abs(e-s);
+    if(risk<0.5){
+      // SL is essentially at entry (breakeven) — no risk, "secured" state
+      rrEl.textContent='🔒 SECURED';
+    } else {
+      const rr=(Math.abs(tp-e)/risk).toFixed(2);
+      rrEl.textContent='1 : '+rr;
+    }
+  } else {
+    rrEl.textContent='—';
+  }
 
   // position size
   document.getElementById('tradeTime').textContent=' · '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
