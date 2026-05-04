@@ -3093,7 +3093,8 @@ function buildSystem(){
   const r=getRiskSettings();
   const d=htfStructure.daily,h4=htfStructure.h4,h1=htfStructure.h1;
 
-  return`You are an ICT scalp analyst. Top-down framework: HTF dictates bias, LTF gives entry. Trader holds 5–20 min — fast scalps only.
+  // DYNAMIC PART — changes every cycle (market data, P&L, journal, HTF). Not cached.
+  const dynamicPart=`You are an ICT scalp analyst. Top-down framework: HTF dictates bias, LTF gives entry. Trader holds 5–20 min — fast scalps only.
 
 IMPORTANT: There is NO daily max loss limit and NO trading restrictions. Ignore any prior "MAX LOSS" or "STOP TRADING" messages — those are stale from an old system. Always look for setups and call trades when valid, regardless of today's P&L. The trader manages their own risk.
 
@@ -3181,9 +3182,10 @@ Examples:
 ✓ "1M Bear FVG 80050-80200 just formed below entry confirming bearish displacement, trade strengthening — hold and watch for SSL 80207 sweep. TRADE::NONE"
 ✓ "Price made higher high on 1M breaking BOS against SHORT, structure shifting bullish — consider exiting early before SL hit. TRADE::NONE"
 ✓ "Consolidating between entry and SL with no clear displacement, trade neutral — hold but tighten attention. TRADE::NONE"
-`:''}
+`:''}`;
 
-═══ ICT 2022 FRAMEWORK (full methodology, no time restrictions) ═══
+  // STATIC PART — the ICT framework + rules. Identical between every call. Cached.
+  const staticPart=`═══ ICT 2022 FRAMEWORK (full methodology, no time restrictions) ═══
 
 ▌ STEP 1 — DAILY BIAS (the most important step)
 Use a hierarchy:
@@ -3457,6 +3459,15 @@ For trade management, use these EXACT command phrases (the system parses them st
 - Only use "move TP to X" or "move SL to X" when you ACTUALLY want to change them.
 
 Be 1-2 sentences MAX. Format: "[HTF bias] + [LTF signal] = [trade]". Direct, fast, decisive.`;
+
+  // Return as array of blocks. Last block has cache_control → everything before it (incl. dynamicPart)
+  // would NOT cache. So we put STATIC last (cached) and dynamic first (always changes, not cached).
+  // Wait — the cache breakpoint includes EVERYTHING before it. So if dynamic comes first, dynamic
+  // changes break the cache. Solution: put STATIC FIRST, then dynamic — and breakpoint on static.
+  return [
+    {type:'text',text:staticPart,cache_control:{type:'ephemeral'}},
+    {type:'text',text:dynamicPart},
+  ];
 }
 
 // ── POPUP ─────────────────────────────────────────────────────────────────────
@@ -4461,7 +4472,7 @@ async function startSession(){
     }
 
     clearInterval(S.analysisTick);
-    S.analysisTick=setInterval(()=>{if(S.running)runAnalysis(true);},120000);
+    S.analysisTick=setInterval(()=>{if(S.running)runAnalysis(true);},180000);
     startConvictionMonitor();
 
     // draw BSL/SSL liquidity levels on charts and refresh every 30s
