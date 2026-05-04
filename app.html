@@ -143,14 +143,20 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .ict-tag.sl{background:rgba(180,90,70,.18);color:rgb(150,60,50);border-color:rgba(180,90,70,.5)}
 
 /* Default state — chart elements have transition for smooth highlight */
-.ict-level{transition:stroke-width .2s,stroke-opacity .2s,filter .2s}
-.ict-zone{transition:fill-opacity .2s,stroke-width .2s,filter .2s}
+.ict-level{transition:stroke-width .2s,stroke-opacity .2s,stroke .2s}
+.ict-zone{transition:fill-opacity .2s,fill .2s}
+.ict-label-bg{transition:fill-opacity .2s,fill .2s}
+.ict-label-txt{transition:fill-opacity .2s,fill .2s}
 
-/* Highlighted line (BSL/SSL) — thicker, full saturation */
-.ict-highlight{stroke-width:3 !important;stroke-opacity:1 !important;filter:drop-shadow(0 0 5px currentColor) brightness(1.15)}
+/* Highlighted line (BSL/SSL) — slightly thicker AND darker for vividness */
+.ict-highlight{stroke-width:2 !important;stroke-opacity:1 !important;filter:saturate(1.4) brightness(0.78)}
 
-/* Highlighted zone (FVG/OB/Breaker) — opacity boosted, dark dashed border */
-.ict-highlight-zone{fill-opacity:.55 !important;stroke:#1a1a1a !important;stroke-width:1.5 !important;stroke-dasharray:5,3;filter:brightness(1.1)}
+/* Matching label gets darker too (line and its label highlight together) */
+.ict-label-bg.ict-highlight-label{fill-opacity:1 !important;filter:saturate(1.4) brightness(0.78)}
+.ict-label-txt.ict-highlight-label{fill-opacity:1 !important}
+
+/* Highlighted zone (FVG/OB/Breaker) — only fill becomes more saturated, no border */
+.ict-highlight-zone{fill-opacity:.45 !important;filter:saturate(1.3)}
 .chat-input-row{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--border)}
 .chat-input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:clamp(.58rem,.68vw,.74rem);padding:6px 8px;border-radius:3px;outline:none;resize:none;transition:border-color .15s}
 .chat-input:focus{border-color:var(--accent)}
@@ -2706,6 +2712,10 @@ function drawLiquidityLevels(){
         bgRect.setAttribute('width',labelW);bgRect.setAttribute('height',labelH);
         bgRect.setAttribute('rx','2');bgRect.setAttribute('ry','2');
         bgRect.setAttribute('fill',labelBg);
+        bgRect.setAttribute('data-entity',label);
+        bgRect.setAttribute('data-price',p.toFixed(2));
+        bgRect.setAttribute('data-tf',k);
+        bgRect.classList.add('ict-label-bg');
         svg.appendChild(bgRect);
         const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
         txt.setAttribute('x',x+labelW/2);txt.setAttribute('y',y+1);
@@ -2716,6 +2726,10 @@ function drawLiquidityLevels(){
         txt.setAttribute('letter-spacing','0.3');
         txt.setAttribute('text-anchor','middle');
         txt.setAttribute('dominant-baseline','middle');
+        txt.setAttribute('data-entity',label);
+        txt.setAttribute('data-price',p.toFixed(2));
+        txt.setAttribute('data-tf',k);
+        txt.classList.add('ict-label-txt');
         txt.textContent=label;
         svg.appendChild(txt);
       };
@@ -3346,34 +3360,40 @@ window._ictHoverState=null; // {kind, price?, top?, bot?}
 
 function applyIctHighlight(){
   const state=window._ictHoverState;
-  // first remove any existing highlight
-  document.querySelectorAll('.ict-highlight, .ict-highlight-zone').forEach(el=>{
-    el.classList.remove('ict-highlight');
-    el.classList.remove('ict-highlight-zone');
-  });
-  if(!state)return;
-  const {kind,price,top,bot}=state;
-  const tol=0.0008; // slightly looser fuzzy match (0.08%)
+  const tol=0.0008;
 
-  document.querySelectorAll('.ict-level, .ict-zone').forEach(el=>{
-    let match=false;
-    if(price!=null&&el.classList.contains('ict-level')){
-      const lineKind=el.dataset.entity;
-      const linePrice=parseFloat(el.dataset.price);
-      if(kind===lineKind&&Math.abs(linePrice-price)/linePrice<tol){
-        match=true;
-      }
-    } else if(top!=null&&bot!=null&&el.classList.contains('ict-zone')){
-      const zoneKind=el.dataset.entity;
-      const zoneTop=parseFloat(el.dataset.top);
-      const zoneBot=parseFloat(el.dataset.bot);
-      if(kind===zoneKind&&Math.abs(zoneTop-top)/zoneTop<tol&&Math.abs(zoneBot-bot)/zoneBot<tol){
-        match=true;
+  // Walk all candidate elements and apply/remove classes only if state mismatches.
+  // This avoids flicker — we never wipe and reapply, we just sync.
+  document.querySelectorAll('.ict-level, .ict-zone, .ict-label-bg, .ict-label-txt').forEach(el=>{
+    let shouldHighlight=false;
+    if(state){
+      const elKind=el.dataset.entity;
+      if(state.price!=null&&(el.classList.contains('ict-level')||el.classList.contains('ict-label-bg')||el.classList.contains('ict-label-txt'))){
+        const linePrice=parseFloat(el.dataset.price);
+        if(state.kind===elKind&&Math.abs(linePrice-state.price)/linePrice<tol){
+          shouldHighlight=true;
+        }
+      } else if(state.top!=null&&state.bot!=null&&el.classList.contains('ict-zone')){
+        const zoneTop=parseFloat(el.dataset.top);
+        const zoneBot=parseFloat(el.dataset.bot);
+        if(state.kind===elKind&&Math.abs(zoneTop-state.top)/zoneTop<tol&&Math.abs(zoneBot-state.bot)/zoneBot<tol){
+          shouldHighlight=true;
+        }
       }
     }
-    if(match){
-      if(el.classList.contains('ict-level'))el.classList.add('ict-highlight');
-      else el.classList.add('ict-highlight-zone');
+
+    if(el.classList.contains('ict-level')){
+      const has=el.classList.contains('ict-highlight');
+      if(shouldHighlight&&!has)el.classList.add('ict-highlight');
+      else if(!shouldHighlight&&has)el.classList.remove('ict-highlight');
+    } else if(el.classList.contains('ict-zone')){
+      const has=el.classList.contains('ict-highlight-zone');
+      if(shouldHighlight&&!has)el.classList.add('ict-highlight-zone');
+      else if(!shouldHighlight&&has)el.classList.remove('ict-highlight-zone');
+    } else if(el.classList.contains('ict-label-bg')||el.classList.contains('ict-label-txt')){
+      const has=el.classList.contains('ict-highlight-label');
+      if(shouldHighlight&&!has)el.classList.add('ict-highlight-label');
+      else if(!shouldHighlight&&has)el.classList.remove('ict-highlight-label');
     }
   });
 }
