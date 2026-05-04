@@ -32,7 +32,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 /* HEADER */
 header{border-bottom:1px solid var(--border);padding:clamp(8px,.8vw,12px) 0;margin-bottom:clamp(8px,.8vw,12px)}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.logo{font-family:'Onest',sans-serif;font-weight:900;font-size:clamp(1.4rem,2vw,2rem);color:var(--text);letter-spacing:0.05em;line-height:1}
+.logo{font-family:'Onest',sans-serif;font-weight:900;font-size:clamp(1.4rem,2vw,2rem);color:var(--text);letter-spacing:0.05em;line-height:1;display:flex;align-items:center}
 .hright{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pill{display:flex;align-items:center;gap:5px;font-size:clamp(.44rem,.52vw,.6rem);letter-spacing:.1em;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:20px}
 .dot{width:5px;height:5px;border-radius:50%}
@@ -157,9 +157,9 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .popup-time{font-size:.46rem;color:var(--muted);margin-top:3px}
 
 /* LIVE PRICE DISPLAY */
-.live-price-wrap{display:flex;align-items:baseline;gap:10px;padding:4px 0}
-.live-price-sym{font-family:var(--display);font-weight:700;font-size:clamp(.8rem,1.2vw,1.4rem);color:var(--muted);letter-spacing:.05em}
-.live-price-val{font-family:var(--display);font-weight:800;font-size:clamp(1.3rem,2.4vw,2.8rem);color:var(--text);letter-spacing:-.02em;transition:color .2s}
+.live-price-wrap{display:flex;align-items:center;gap:10px;padding:4px 0}
+.live-price-sym{font-family:var(--display);font-weight:700;font-size:clamp(.8rem,1.1vw,1.2rem);color:var(--muted);letter-spacing:.05em;line-height:1}
+.live-price-val{font-family:var(--display);font-weight:800;font-size:clamp(1.1rem,1.8vw,2rem);color:var(--text);letter-spacing:-.02em;transition:color .2s;line-height:1}
 .live-price-val.flash-up{color:var(--bull);text-shadow:0 0 20px rgba(42,42,42,.4)}
 .live-price-val.flash-down{color:var(--bear);text-shadow:0 0 20px rgba(122,122,120,.4)}
 .live-price-chg{font-size:clamp(.62rem,.9vw,1rem);font-family:var(--mono);font-weight:700;padding:2px 8px;border-radius:3px}
@@ -286,7 +286,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 
 <header>
   <div class="hrow">
-    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
       <div class="logo">QALO</div>
       <!-- LIVE PRICE -->
       <div class="live-price-wrap" id="livePriceWrap" style="display:none">
