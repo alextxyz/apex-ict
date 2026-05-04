@@ -2341,9 +2341,9 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
   const swingHighs=[];
   const swingLows=[];
 
-  // scan ALL candles for swing points (not just recent 60%) — unswept liquidity matters even if older.
-  // The unswept-filter below already drops levels that have been taken out, so older levels that survive
-  // ARE the ones still drawing institutional interest.
+  // First pass: full-lookback swings (i has lb candles on each side).
+  // Second pass: recent swings — last lb candles of history may form a valid swing
+  //   if they are the highest/lowest of the last (lb*2+1) bars and have at least 1 bar after them.
   for(let i=lb;i<c.length-lb;i++){
     const window=c.slice(i-lb,i+lb+1);
     const winHi=Math.max(...window.map(x=>x.high));
@@ -2360,6 +2360,37 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
       }
     }
     if(isLow){
+      const localHigh=Math.max(...window.map(x=>x.high));
+      const range=(localHigh-c[i].low)/c[i].low;
+      if(range>=minMovePct){
+        swingLows.push({price:c[i].low,time:c[i].time,idx:i,strength:range});
+      }
+    }
+  }
+
+  // SECOND PASS — capture recent swings that don't have full right-lookback yet.
+  // For the last `lb` candles, accept as swing if they are the highest/lowest of the last (lb*2+1)
+  // candles AND have at least 1 candle after them confirming (i.e. not the most recent live candle).
+  const minRightConfirm=1;
+  for(let i=Math.max(lb,c.length-lb);i<c.length-minRightConfirm;i++){
+    const lookbackStart=Math.max(0,i-lb);
+    const window=c.slice(lookbackStart,c.length); // includes everything from lb candles back to end
+    const winHi=Math.max(...window.map(x=>x.high));
+    const winLo=Math.min(...window.map(x=>x.low));
+    const eqEps=1e-6;
+    const isHigh=Math.abs(c[i].high-winHi)<=eqEps;
+    const isLow=Math.abs(c[i].low-winLo)<=eqEps;
+    if(isHigh){
+      // skip if already captured in first pass
+      if(swingHighs.some(s=>s.idx===i))continue;
+      const localLow=Math.min(...window.map(x=>x.low));
+      const range=(c[i].high-localLow)/c[i].high;
+      if(range>=minMovePct){
+        swingHighs.push({price:c[i].high,time:c[i].time,idx:i,strength:range});
+      }
+    }
+    if(isLow){
+      if(swingLows.some(s=>s.idx===i))continue;
       const localHigh=Math.max(...window.map(x=>x.high));
       const range=(localHigh-c[i].low)/c[i].low;
       if(range>=minMovePct){
