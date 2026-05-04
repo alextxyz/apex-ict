@@ -1472,6 +1472,10 @@ function saveSession(){
       lastSaved:Date.now(),
     };
     localStorage.setItem(`txyz_session_${apexUser}`,JSON.stringify(data));
+    if(window._lastTradeStateLog!==!!activeTrade){
+      window._lastTradeStateLog=!!activeTrade;
+      console.log('[SAVE SESSION] activeTrade:',activeTrade?`${activeTrade.dir} @ ${activeTrade.entry} SL ${activeTrade.sl} TP ${activeTrade.tp}`:'null');
+    }
   }catch(e){}
 }
 
@@ -1487,7 +1491,13 @@ function loadSession(){
 
 function restoreSession(){
   const data=loadSession();
-  if(!data)return false;
+  if(!data){console.log('[RESTORE] no session data found');return false;}
+  console.log('[RESTORE] loaded session:',{
+    hasActiveTrade:!!data.activeTrade,
+    activeTradeInfo:data.activeTrade?`${data.activeTrade.dir} @ ${data.activeTrade.entry}`:'null',
+    chatLen:data.chatHistory?.length||0,
+    ageMin:data.lastSaved?Math.round((Date.now()-data.lastSaved)/60000):'unknown'
+  });
   if(data.chatHistory&&data.chatHistory.length){
     // filter out stale max-loss/stop-trading system messages from old code versions
     data.chatHistory=data.chatHistory.filter(m=>{
@@ -3566,7 +3576,14 @@ End with TRADE::NONE. Max 2 sentences.`;
   } else if(isFirst){
     prompt=`I just started monitoring ${document.getElementById('pairSelect').value}. Give me an immediate scalp read — HTF bias and any tradeable setup forming right now. ${liveLevels} Use ONLY these levels — do not invent your own. If you see a valid setup, call it with TRADE::. Max 2 sentences.`;
   } else {
-    prompt=`${document.getElementById('pairSelect').value} just updated. ${liveLevels} Use ONLY these levels — any number you cite as BSL/SSL must be in the list. Look for sweep, BOS, FVG fill, OB tap. If you see ANY tradeable opportunity, call it with TRADE::. Otherwise reply ONLY with "No change." Max 2 sentences.`;
+    prompt=`${document.getElementById('pairSelect').value} just updated. ${liveLevels} Use ONLY these levels — any number you cite as BSL/SSL must be in the list.
+
+Three possible response types:
+1) **READY TRADE** — price IS at the entry zone NOW (within 0.05%) → call TRADE::LONG/SHORT|entry|sl|tp immediately
+2) **PENDING SETUP** — setup is forming but price needs to retrace/move to reach CE → say "Pending [LONG/SHORT] at [CE price] — watching for retrace" + TRADE::NONE
+3) **NO SETUP** — nothing forming → reply "No change." + TRADE::NONE
+
+If a clear setup is pending, ALWAYS use response #2 (don't just say "No change") so the trader knows you're tracking a specific level. Max 2 sentences.`;
   }
   S.chatHistory.push({role:'user',content:prompt});
   // when in trade-management mode, only send recent messages so agent doesn't
@@ -3949,6 +3966,8 @@ function drawTradeLines(trade){
 }
 
 function onTradeClose(reason,hitPrice,isWin){
+  console.warn('[TRADE CLOSE]',{reason,hitPrice,isWin,activeTrade,stack:new Error().stack});
+  log(`🔴 onTradeClose triggered: ${reason} @ ${hitPrice}`,'warn');
   clearInterval(tradeCheckInterval);
   tradeCheckInterval=null;
   clearTradeLines();
