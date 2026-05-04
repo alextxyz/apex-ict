@@ -127,6 +127,24 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .msg.agent{background:var(--s2);border:1px solid var(--border);color:var(--text);align-self:flex-start;max-width:96%}
 .msg.agent.thinking{color:var(--muted);font-style:italic;animation:blink 1.3s infinite}
 .chat-empty{text-align:center;color:var(--muted);font-size:clamp(.5rem,.58vw,.64rem);padding:16px 10px;line-height:1.8}
+
+/* ICT entity badges in chat messages */
+.ict-tag{display:inline-block;padding:1px 5px;border-radius:3px;font-weight:700;font-family:var(--mono);font-size:.95em;cursor:help;border:1px solid transparent;transition:transform .12s,box-shadow .12s;white-space:nowrap}
+.ict-tag:hover{transform:translateY(-1px);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.ict-tag.bsl{background:rgba(70,90,140,.15);color:rgb(50,70,120);border-color:rgba(70,90,140,.4)}
+.ict-tag.ssl{background:rgba(140,80,110,.15);color:rgb(120,60,90);border-color:rgba(140,80,110,.4)}
+.ict-tag.fvg-bull{background:rgba(120,150,90,.18);color:rgb(80,110,60);border-color:rgba(120,150,90,.5)}
+.ict-tag.fvg-bear{background:rgba(170,100,90,.18);color:rgb(140,70,60);border-color:rgba(170,100,90,.5)}
+.ict-tag.ob-bull{background:rgba(80,130,170,.18);color:rgb(50,100,140);border-color:rgba(80,130,170,.5)}
+.ict-tag.ob-bear{background:rgba(180,130,80,.18);color:rgb(150,100,50);border-color:rgba(180,130,80,.5)}
+.ict-tag.brk{background:rgba(140,100,160,.18);color:rgb(110,75,130);border-color:rgba(140,100,160,.5)}
+.ict-tag.entry{background:rgba(60,60,58,.15);color:#1a1a1a;border-color:rgba(60,60,58,.4)}
+.ict-tag.tp{background:rgba(90,140,80,.18);color:rgb(60,110,55);border-color:rgba(90,140,80,.5)}
+.ict-tag.sl{background:rgba(180,90,70,.18);color:rgb(150,60,50);border-color:rgba(180,90,70,.5)}
+
+/* Chart-side highlighted state */
+.ict-highlight{stroke-width:3 !important;filter:drop-shadow(0 0 6px currentColor)}
+.ict-highlight-zone{stroke:#1a1a1a !important;stroke-width:2 !important;stroke-dasharray:4,2}
 .chat-input-row{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--border)}
 .chat-input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:clamp(.58rem,.68vw,.74rem);padding:6px 8px;border-radius:3px;outline:none;resize:none;transition:border-color .15s}
 .chat-input:focus{border-color:var(--accent)}
@@ -2668,6 +2686,10 @@ function drawLiquidityLevels(){
         line.setAttribute('x2',lineEnd);line.setAttribute('y2',y);
         line.setAttribute('stroke',lineColor);
         line.setAttribute('stroke-width','1.2');
+        line.setAttribute('data-entity',label);
+        line.setAttribute('data-price',p.toFixed(2));
+        line.setAttribute('data-tf',k);
+        line.classList.add('ict-level');
         svg.appendChild(line);
         // label pill near right edge
         const labelW=26,labelH=13;
@@ -2706,7 +2728,7 @@ function drawLiquidityLevels(){
       liqCtx.ssl.forEach(o=>drawLevel(o.price,o.time,'SSL',`rgba(140,80,110,${lineAlpha})`,`rgba(140,80,110,${labelAlpha})`));
 
       // ── FVG BOXES ── unfilled gaps as translucent rectangles
-      const drawZoneBox=(top,bot,time,isBull,solid)=>{
+      const drawZoneBox=(top,bot,time,isBull,solid,kind)=>{
         const yTop=series.priceToCoordinate(parseFloat(top));
         const yBot=series.priceToCoordinate(parseFloat(bot));
         if(yTop==null||yBot==null)return;
@@ -2722,12 +2744,17 @@ function drawLiquidityLevels(){
         rect.setAttribute('height',Math.abs(yBot-yTop));
         const fillA=isM1?0.08:0.18;
         rect.setAttribute('fill',isBull?`rgba(120,150,90,${fillA})`:`rgba(170,100,90,${fillA})`);
+        rect.setAttribute('data-entity',kind||'FVG');
+        rect.setAttribute('data-top',parseFloat(top).toFixed(2));
+        rect.setAttribute('data-bot',parseFloat(bot).toFixed(2));
+        rect.setAttribute('data-tf',k);
+        rect.classList.add('ict-zone');
         svg.appendChild(rect);
       };
 
       // FVG — dashed box
       if(fresh.fvgsRaw){
-        fresh.fvgsRaw.forEach(g=>drawZoneBox(g.top,g.bot,g.time,g.type==='BULL',false));
+        fresh.fvgsRaw.forEach(g=>drawZoneBox(g.top,g.bot,g.time,g.type==='BULL',false,'FVG'));
       }
 
       // OB — solid box (more important, often deeper zone)
@@ -2749,6 +2776,11 @@ function drawLiquidityLevels(){
           rect.setAttribute('height',Math.abs(yBot-yTop));
           const obFill=isM1?0.1:0.22;
           rect.setAttribute('fill',isBull?`rgba(80,130,170,${obFill})`:`rgba(180,130,80,${obFill})`);
+          rect.setAttribute('data-entity','OB');
+          rect.setAttribute('data-top',parseFloat(o.top).toFixed(2));
+          rect.setAttribute('data-bot',parseFloat(o.bot).toFixed(2));
+          rect.setAttribute('data-tf',k);
+          rect.classList.add('ict-zone');
           svg.appendChild(rect);
         });
       }
@@ -2770,6 +2802,11 @@ function drawLiquidityLevels(){
           rect.setAttribute('width',Math.max(0,lineEnd-xStart));
           rect.setAttribute('height',Math.max(2,Math.abs(yBot-yTop)));
           rect.setAttribute('fill',isM1?'rgba(140,100,160,0.08)':'rgba(140,100,160,0.18)');
+          rect.setAttribute('data-entity','BRK');
+          rect.setAttribute('data-top',parseFloat(b.top).toFixed(2));
+          rect.setAttribute('data-bot',parseFloat(b.bot).toFixed(2));
+          rect.setAttribute('data-tf',k);
+          rect.classList.add('ict-zone');
           svg.appendChild(rect);
         });
       }
@@ -3259,6 +3296,94 @@ function setAgentStatus(s){
   else{dot.className='agent-dot';lbl.textContent='OFFLINE';}
 }
 
+// ── ICT ENTITY DECORATOR ─────────────────────────────────────────────────────
+// detects FVG/OB/BSL/SSL/Breaker/Entry/SL/TP mentions in agent text and wraps
+// them in clickable badges that highlight the corresponding chart element on hover.
+function decorateMsg(text){
+  // escape HTML first
+  let html=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Range patterns first (so they're caught before single-price patterns):
+  // "Bear FVG 78650-78680" or "Bull FVG 78700 - 78730" or "FVG @ 78650-78680"
+  html=html.replace(/\b(Bull|Bear)?\s*(FVG|fvg)\s*@?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,pol,_kw,a,b)=>{
+    const isBull=/bull/i.test(pol||'');
+    const cls=isBull?'fvg-bull':'fvg-bear';
+    return `<span class="ict-tag ${cls}" data-kind="FVG" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">${pol?pol+' ':''}FVG ${a}-${b}</span>`;
+  });
+  html=html.replace(/\b(Bull|Bear)?\s*(OB|ob|Order Block)\s*@?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,pol,kw,a,b)=>{
+    const isBull=/bull/i.test(pol||'');
+    const cls=isBull?'ob-bull':'ob-bear';
+    return `<span class="ict-tag ${cls}" data-kind="OB" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">${pol?pol+' ':''}OB ${a}-${b}</span>`;
+  });
+  html=html.replace(/\b(Breaker|BRK|breaker block)\s*@?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/gi,(m,kw,a,b)=>{
+    return `<span class="ict-tag brk" data-kind="BRK" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">Breaker ${a}-${b}</span>`;
+  });
+
+  // Single-price patterns:
+  // "BSL @ 78900" or "BSL 78900" or "BSL at 78900"
+  html=html.replace(/\bBSL\s*(?:@|at)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,p)=>`<span class="ict-tag bsl" data-kind="BSL" data-price="${(+p).toFixed(2)}">BSL ${p}</span>`);
+  html=html.replace(/\bSSL\s*(?:@|at)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,p)=>`<span class="ict-tag ssl" data-kind="SSL" data-price="${(+p).toFixed(2)}">SSL ${p}</span>`);
+
+  // Entry/SL/TP keywords
+  html=html.replace(/\bentry\s*(?:@|at|:)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/gi,(m,p)=>`<span class="ict-tag entry" data-kind="ENTRY" data-price="${(+p).toFixed(2)}">Entry ${p}</span>`);
+  html=html.replace(/\bSL\s*(?:@|at|:)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,p)=>`<span class="ict-tag sl" data-kind="SL" data-price="${(+p).toFixed(2)}">SL ${p}</span>`);
+  html=html.replace(/\bTP\s*(?:@|at|:)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,p)=>`<span class="ict-tag tp" data-kind="TP" data-price="${(+p).toFixed(2)}">TP ${p}</span>`);
+
+  return html;
+}
+
+// hover/highlight handlers — find matching chart element by data-attrs
+function ictTagHover(tagEl,enable){
+  const kind=tagEl.dataset.kind;
+  const price=tagEl.dataset.price;
+  const top=tagEl.dataset.top;
+  const bot=tagEl.dataset.bot;
+  const tol=0.0005; // 0.05% tolerance for fuzzy matching
+
+  // find matching chart elements across all charts
+  document.querySelectorAll('.ict-level, .ict-zone').forEach(el=>{
+    let match=false;
+    if(price&&el.classList.contains('ict-level')){
+      // line match
+      const lineKind=el.dataset.entity;
+      const linePrice=parseFloat(el.dataset.price);
+      if(kind===lineKind&&Math.abs(linePrice-parseFloat(price))/linePrice<tol){
+        match=true;
+      }
+    } else if(top&&bot&&el.classList.contains('ict-zone')){
+      // zone match — kind FVG/OB/BRK
+      const zoneKind=el.dataset.entity;
+      const zoneTop=parseFloat(el.dataset.top);
+      const zoneBot=parseFloat(el.dataset.bot);
+      if(kind===zoneKind&&Math.abs(zoneTop-parseFloat(top))/zoneTop<tol&&Math.abs(zoneBot-parseFloat(bot))/zoneBot<tol){
+        match=true;
+      }
+    }
+    if(match){
+      if(enable){
+        if(el.classList.contains('ict-level'))el.classList.add('ict-highlight');
+        else el.classList.add('ict-highlight-zone');
+      } else {
+        el.classList.remove('ict-highlight');
+        el.classList.remove('ict-highlight-zone');
+      }
+    }
+  });
+}
+
+// attach hover delegates once
+if(!window._ictHoverBound){
+  window._ictHoverBound=true;
+  document.addEventListener('mouseover',e=>{
+    const tag=e.target.closest?.('.ict-tag');
+    if(tag)ictTagHover(tag,true);
+  });
+  document.addEventListener('mouseout',e=>{
+    const tag=e.target.closest?.('.ict-tag');
+    if(tag)ictTagHover(tag,false);
+  });
+}
+
 function addMsgToChat(text,role='agent'){
   const el=document.getElementById('chatMessages');
   const empty=el.querySelector('.chat-empty');if(empty)empty.remove();
@@ -3273,7 +3398,12 @@ function addMsgToChat(text,role='agent'){
     timeEl.style.cssText='font-size:.5rem;color:var(--muted);margin-right:6px;font-family:var(--mono);opacity:.6';
     timeEl.textContent=time;
     const txtEl=document.createElement('span');
-    txtEl.textContent=text;
+    // decorate agent messages with ICT entity badges; user messages stay plain text
+    if(role==='agent'){
+      txtEl.innerHTML=decorateMsg(text);
+    } else {
+      txtEl.textContent=text;
+    }
     d.appendChild(timeEl);
     d.appendChild(txtEl);
   }
@@ -3681,27 +3811,34 @@ function drawTradeLines(trade){
   clearInterval(tradeCheckInterval);
   tradeCheckInterval=setInterval(()=>{
     const price=S.lastPrice;
-    if(!price)return;
+    if(!price||!activeTrade)return;
+
+    // ALWAYS read latest SL/TP from activeTrade (so breakeven moves are picked up)
+    const liveSl=parseFloat(activeTrade.sl);
+    const liveTp=parseFloat(activeTrade.tp);
+    const liveIsBull=activeTrade.dir==='LONG';
+    if(!liveSl||!liveTp)return;
 
     // track max profit & drawdown from entry (in %)
-    if(activeTrade){
-      const e=parseFloat(activeTrade.entry);
-      const pctMove=isBull?((price-e)/e*100):((e-price)/e*100);
-      if(pctMove>activeTrade.maxProfit)activeTrade.maxProfit=+pctMove.toFixed(3);
-      if(pctMove<activeTrade.maxDrawdown)activeTrade.maxDrawdown=+pctMove.toFixed(3);
-    }
+    const e=parseFloat(activeTrade.entry);
+    const pctMove=liveIsBull?((price-e)/e*100):((e-price)/e*100);
+    if(pctMove>activeTrade.maxProfit)activeTrade.maxProfit=+pctMove.toFixed(3);
+    if(pctMove<activeTrade.maxDrawdown)activeTrade.maxDrawdown=+pctMove.toFixed(3);
 
-    if(isBull){
-      if(price<=sl){
-        onTradeClose('STOP LOSS HIT',sl,false);
-      } else if(price>=tp){
-        onTradeClose('TAKE PROFIT HIT ✓',tp,true);
+    if(liveIsBull){
+      if(price<=liveSl){
+        // distinguish breakeven hit from real stop
+        const reason=liveSl===e?'BREAKEVEN HIT':'STOP LOSS HIT';
+        onTradeClose(reason,liveSl,liveSl>e);
+      } else if(price>=liveTp){
+        onTradeClose('TAKE PROFIT HIT ✓',liveTp,true);
       }
     } else {
-      if(price>=sl){
-        onTradeClose('STOP LOSS HIT',sl,false);
-      } else if(price<=tp){
-        onTradeClose('TAKE PROFIT HIT ✓',tp,true);
+      if(price>=liveSl){
+        const reason=liveSl===e?'BREAKEVEN HIT':'STOP LOSS HIT';
+        onTradeClose(reason,liveSl,liveSl<e);
+      } else if(price<=liveTp){
+        onTradeClose('TAKE PROFIT HIT ✓',liveTp,true);
       }
     }
   },500);
@@ -3716,7 +3853,7 @@ function onTradeClose(reason,hitPrice,isWin){
     const entry=parseFloat(activeTrade.entry);
     const isBull=activeTrade.dir==='LONG';
     const pnlPct=isBull?((hitPrice-entry)/entry*100).toFixed(2):((entry-hitPrice)/entry*100).toFixed(2);
-    const outcome=reason.includes('TAKE PROFIT')?'TP':reason.includes('STOP')?'SL':'MANUAL';
+    const outcome=reason.includes('TAKE PROFIT')?'TP':reason.includes('BREAKEVEN')?'BE':reason.includes('STOP')?'SL':'MANUAL';
     logTradeToJournal(activeTrade,outcome,hitPrice,pnlPct);
     // tell the agent explicitly that the trade is now closed
     S.chatHistory.push({
