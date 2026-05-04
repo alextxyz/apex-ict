@@ -32,9 +32,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 /* HEADER */
 header{border-bottom:1px solid var(--border);padding:clamp(8px,.8vw,12px) 0;margin-bottom:clamp(8px,.8vw,12px)}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.logo{font-family:'Onest',sans-serif;font-weight:900;font-size:clamp(1.4rem,2vw,2rem);color:var(--text);letter-spacing:0.05em;line-height:1;display:flex;flex-direction:column;gap:4px}
-.logo .brand{display:block}
-.logo .tag{font-family:'Departure Mono',monospace;font-size:clamp(.42rem,.55vw,.58rem);font-weight:400;color:var(--muted);letter-spacing:0.595em;line-height:1;text-indent:0.595em}
+.logo{font-family:'Onest',sans-serif;font-weight:900;font-size:clamp(1.4rem,2vw,2rem);color:var(--text);letter-spacing:0.05em;line-height:1}
 .hright{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pill{display:flex;align-items:center;gap:5px;font-size:clamp(.44rem,.52vw,.6rem);letter-spacing:.1em;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:20px}
 .dot{width:5px;height:5px;border-radius:50%}
@@ -289,7 +287,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 <header>
   <div class="hrow">
     <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-      <div class="logo"><span class="brand">QALO</span><span class="tag">TRADING PLATFORM</span></div>
+      <div class="logo">QALO</div>
       <!-- LIVE PRICE -->
       <div class="live-price-wrap" id="livePriceWrap" style="display:none">
         <span class="live-price-sym" id="livePriceSym">BTC</span>
@@ -589,14 +587,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('settingsUser').textContent=apexUser.toUpperCase();
   document.getElementById('settingsUser2').textContent=apexUser.toUpperCase();
 
-  // username in header logo
-  const logo=document.querySelector('.logo');
-  if(logo){
-    const s=document.createElement('span');
-    s.style.cssText='font-size:.46rem;color:var(--muted);margin-left:10px;letter-spacing:.1em;font-family:var(--mono);font-weight:400;vertical-align:middle';
-    s.textContent='HI, '+apexUser.toUpperCase();
-    logo.appendChild(s);
-  }
+  // username greeting removed — keep logo clean
 
   // auto-save key when pasted or changed in modal
   const modalInput=document.getElementById('antKeyModal');
