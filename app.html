@@ -2368,23 +2368,25 @@ function eqLevels(c,tol=0.001,lb=5,minMovePct=0){
     }
   }
 
-  // BSL: a swing high is liquidity if no LATER candle has CLOSED above it
-  // (using close, not high — wicks above don't count as a real sweep)
+  // BSL: a swing high is "still active liquidity" only if NO LATER candle has wicked above it AND closed near/above.
+  // ICT sweep = wick above swing high + close back below = liquidity was raided (level is now consumed).
+  // Strict breakthrough (close above) = level fully broken, also consumed.
   const bsl=[];
   swingHighs.forEach(sh=>{
     let swept=false;
     for(let j=sh.idx+1;j<c.length;j++){
-      if(c[j].close>sh.price){swept=true;break;}
+      // case 1: candle wicked above the level (real ICT sweep, regardless of close)
+      if(c[j].high>sh.price){swept=true;break;}
     }
     if(!swept)bsl.push({price:sh.price.toFixed(2),time:sh.time,strength:sh.strength});
   });
 
-  // SSL: swing low is liquidity if no LATER candle has CLOSED below it
+  // SSL: same logic mirrored — swing low is still active only if no later candle has wicked below it
   const ssl=[];
   swingLows.forEach(sl=>{
     let swept=false;
     for(let j=sl.idx+1;j<c.length;j++){
-      if(c[j].close<sl.price){swept=true;break;}
+      if(c[j].low<sl.price){swept=true;break;}
     }
     if(!swept)ssl.push({price:sl.price.toFixed(2),time:sl.time,strength:sl.strength});
   });
