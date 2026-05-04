@@ -2764,8 +2764,8 @@ function drawLiquidityLevels(){
         rect.setAttribute('y',Math.min(yTop,yBot));
         rect.setAttribute('width',Math.max(0,lineEnd-xStart));
         rect.setAttribute('height',Math.abs(yBot-yTop));
-        const fillA=0.08;
-        rect.setAttribute('fill',isBull?`rgba(120,150,90,${fillA})`:`rgba(170,100,90,${fillA})`);
+        rect.setAttribute('fill',isBull?'rgb(120,150,90)':'rgb(170,100,90)');
+        rect.setAttribute('fill-opacity','0.1');
         rect.setAttribute('data-entity',kind||'FVG');
         rect.setAttribute('data-top',parseFloat(top).toFixed(2));
         rect.setAttribute('data-bot',parseFloat(bot).toFixed(2));
@@ -2796,8 +2796,8 @@ function drawLiquidityLevels(){
           rect.setAttribute('y',Math.min(yTop,yBot));
           rect.setAttribute('width',Math.max(0,lineEnd-xStart));
           rect.setAttribute('height',Math.abs(yBot-yTop));
-          const obFill=0.1;
-          rect.setAttribute('fill',isBull?`rgba(80,130,170,${obFill})`:`rgba(180,130,80,${obFill})`);
+          rect.setAttribute('fill',isBull?'rgb(80,130,170)':'rgb(180,130,80)');
+          rect.setAttribute('fill-opacity','0.12');
           rect.setAttribute('data-entity','OB');
           rect.setAttribute('data-top',parseFloat(o.top).toFixed(2));
           rect.setAttribute('data-bot',parseFloat(o.bot).toFixed(2));
@@ -2823,7 +2823,8 @@ function drawLiquidityLevels(){
           rect.setAttribute('y',Math.min(yTop,yBot));
           rect.setAttribute('width',Math.max(0,lineEnd-xStart));
           rect.setAttribute('height',Math.max(2,Math.abs(yBot-yTop)));
-          rect.setAttribute('fill','rgba(140,100,160,0.08)');
+          rect.setAttribute('fill','rgb(140,100,160)');
+          rect.setAttribute('fill-opacity','0.1');
           rect.setAttribute('data-entity','BRK');
           rect.setAttribute('data-top',parseFloat(b.top).toFixed(2));
           rect.setAttribute('data-bot',parseFloat(b.bot).toFixed(2));
@@ -2834,8 +2835,13 @@ function drawLiquidityLevels(){
       }
     }
 
-    redraw();
-    const timer=setInterval(redraw,1000);
+    function redrawWithHighlight(){
+      redraw();
+      // immediately reapply any active hover highlight so it doesn't flicker
+      if(window._ictHoverState&&typeof applyIctHighlight==='function')applyIctHighlight();
+    }
+    redrawWithHighlight();
+    const timer=setInterval(redrawWithHighlight,1000);
     liquidityOverlays[k]={svg,timer,redraw};
   });
 
@@ -3586,7 +3592,16 @@ async function sendChat(){
     detectTradeEvents(raw);
     const chatLevels=extractLevelsFromText(raw);
     if(chatLevels.length)setWatchedLevels([...S.watchedLevels,...chatLevels].slice(0,15));
-    thinking.className='msg agent';thinking.textContent=display;
+    thinking.className='msg agent';
+    thinking.innerHTML='';
+    const time=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
+    const timeEl=document.createElement('span');
+    timeEl.style.cssText='font-size:.5rem;color:var(--muted);margin-right:6px;font-family:var(--mono);opacity:.6';
+    timeEl.textContent=time;
+    const txtEl=document.createElement('span');
+    txtEl.innerHTML=decorateMsg(display);
+    thinking.appendChild(timeEl);
+    thinking.appendChild(txtEl);
   }catch(e){thinking.className='msg agent';thinking.textContent='Error: '+e.message;}
   document.getElementById('chatSend').disabled=false;
   document.getElementById('chatMessages').scrollTop=99999;
