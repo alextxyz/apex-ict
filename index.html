@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TXYZ — Login</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<title>QALO — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&family=Onest:wght@500;700;900&family=Departure+Mono&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -23,8 +23,9 @@ body::after{content:'';position:fixed;top:30%;left:50%;transform:translate(-50%,
 
 /* LOGO */
 .logo-wrap{text-align:center;margin-bottom:40px}
-.logo{font-family:var(--display);font-weight:800;font-size:2.8rem;color:var(--text);letter-spacing:-.03em;line-height:1}
-.logo em{color:var(--gold);font-style:normal}
+.logo{font-family:'Onest',sans-serif;font-weight:900;font-size:2.4rem;color:var(--text);letter-spacing:0.05em;line-height:1;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.logo .brand{display:block}
+.logo .tag{font-family:'Departure Mono',monospace;font-size:.55rem;font-weight:400;color:var(--muted);letter-spacing:0.595em;line-height:1;text-indent:0.595em}
 .logo-sub{font-size:.6rem;letter-spacing:.25em;color:var(--muted);margin-top:8px}
 
 /* CARD */
@@ -49,8 +50,9 @@ body::after{content:'';position:fixed;top:30%;left:50%;transform:translate(-50%,
 
 /* WELCOME SCREEN */
 .welcome{position:fixed;inset:0;background:var(--bg);z-index:100;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
-.welcome-logo{font-family:var(--display);font-weight:800;font-size:3rem;color:var(--text);letter-spacing:-.03em}
-.welcome-logo em{color:var(--gold);font-style:normal}
+.welcome-logo{font-family:'Onest',sans-serif;font-weight:900;font-size:3rem;color:var(--text);letter-spacing:0.05em;line-height:1;display:flex;flex-direction:column;gap:8px;align-items:center}
+.welcome-logo .brand{display:block}
+.welcome-logo .tag{font-family:'Departure Mono',monospace;font-size:.62rem;font-weight:400;color:var(--muted);letter-spacing:0.595em;line-height:1;text-indent:0.595em}
 .welcome-text{font-size:1rem;letter-spacing:.15em;color:var(--muted)}
 .welcome-name{font-family:var(--display);font-weight:700;font-size:2rem;color:var(--accent);letter-spacing:-.01em}
 .welcome-bar{width:200px;height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-top:8px}
@@ -66,7 +68,7 @@ body::after{content:'';position:fixed;top:30%;left:50%;transform:translate(-50%,
 
 <!-- WELCOME OVERLAY -->
 <div class="welcome" id="welcomeScreen">
-  <div class="welcome-logo">TXYZ</div>
+  <div class="welcome-logo"><span class="brand">QALO</span><span class="tag">TRADING PLATFORM</span></div>
   <div class="welcome-text">WELCOME BACK</div>
   <div class="welcome-name" id="welcomeName"></div>
   <div class="welcome-bar"><div class="welcome-fill" id="welcomeFill"></div></div>
@@ -74,8 +76,7 @@ body::after{content:'';position:fixed;top:30%;left:50%;transform:translate(-50%,
 
 <div class="container">
   <div class="logo-wrap">
-    <div class="logo">TXYZ</div>
-    <div class="logo-sub">SCALP TRADING PLATFORM</div>
+    <div class="logo"><span class="brand">QALO</span><span class="tag">TRADING PLATFORM</span></div>
   </div>
 
   <div class="card">

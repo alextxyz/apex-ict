@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TXYZ — Scalp</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<title>QALO — Trading Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&family=Onest:wght@500;700;900&family=Departure+Mono&display=swap" rel="stylesheet">
 <script src="./lightweight-charts.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
@@ -32,8 +32,9 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 /* HEADER */
 header{border-bottom:1px solid var(--border);padding:clamp(8px,.8vw,12px) 0;margin-bottom:clamp(8px,.8vw,12px)}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.logo{font-family:var(--display);font-weight:800;font-size:clamp(1rem,1.6vw,1.8rem);color:var(--text);letter-spacing:-.02em}
-.logo em{color:var(--gold);font-style:normal}
+.logo{font-family:'Onest',sans-serif;font-weight:900;font-size:clamp(1.4rem,2vw,2rem);color:var(--text);letter-spacing:0.05em;line-height:1;display:flex;flex-direction:column;gap:4px}
+.logo .brand{display:block}
+.logo .tag{font-family:'Departure Mono',monospace;font-size:clamp(.42rem,.55vw,.58rem);font-weight:400;color:var(--muted);letter-spacing:0.595em;line-height:1;text-indent:0.595em}
 .hright{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pill{display:flex;align-items:center;gap:5px;font-size:clamp(.44rem,.52vw,.6rem);letter-spacing:.1em;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:20px}
 .dot{width:5px;height:5px;border-radius:50%}
@@ -128,35 +129,6 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .msg.agent.thinking{color:var(--muted);font-style:italic;animation:blink 1.3s infinite}
 .chat-empty{text-align:center;color:var(--muted);font-size:clamp(.5rem,.58vw,.64rem);padding:16px 10px;line-height:1.8}
 
-/* ICT entity badges in chat messages */
-.ict-tag{display:inline-block;padding:1px 5px;border-radius:3px;font-weight:700;font-family:var(--mono);font-size:.95em;cursor:help;border:1px solid transparent;transition:transform .12s,box-shadow .12s;white-space:nowrap}
-.ict-tag:hover{transform:translateY(-1px);box-shadow:0 1px 4px rgba(0,0,0,.15)}
-.ict-tag.bsl{background:rgba(70,90,140,.15);color:rgb(50,70,120);border-color:rgba(70,90,140,.4)}
-.ict-tag.ssl{background:rgba(140,80,110,.15);color:rgb(120,60,90);border-color:rgba(140,80,110,.4)}
-.ict-tag.fvg-bull{background:rgba(120,150,90,.18);color:rgb(80,110,60);border-color:rgba(120,150,90,.5)}
-.ict-tag.fvg-bear{background:rgba(170,100,90,.18);color:rgb(140,70,60);border-color:rgba(170,100,90,.5)}
-.ict-tag.ob-bull{background:rgba(80,130,170,.18);color:rgb(50,100,140);border-color:rgba(80,130,170,.5)}
-.ict-tag.ob-bear{background:rgba(180,130,80,.18);color:rgb(150,100,50);border-color:rgba(180,130,80,.5)}
-.ict-tag.brk{background:rgba(140,100,160,.18);color:rgb(110,75,130);border-color:rgba(140,100,160,.5)}
-.ict-tag.entry{background:rgba(60,60,58,.15);color:#1a1a1a;border-color:rgba(60,60,58,.4)}
-.ict-tag.tp{background:rgba(90,140,80,.18);color:rgb(60,110,55);border-color:rgba(90,140,80,.5)}
-.ict-tag.sl{background:rgba(180,90,70,.18);color:rgb(150,60,50);border-color:rgba(180,90,70,.5)}
-
-/* Default state — chart elements have transition for smooth highlight */
-.ict-level{transition:stroke-width .2s,stroke-opacity .2s,stroke .2s}
-.ict-zone{transition:fill-opacity .2s,fill .2s}
-.ict-label-bg{transition:fill-opacity .2s,fill .2s}
-.ict-label-txt{transition:fill-opacity .2s,fill .2s}
-
-/* Highlighted line (BSL/SSL) — slightly thicker AND darker for vividness */
-.ict-highlight{stroke-width:2 !important;stroke-opacity:1 !important;filter:saturate(1.4) brightness(0.78)}
-
-/* Matching label gets darker too (line and its label highlight together) */
-.ict-label-bg.ict-highlight-label{fill-opacity:1 !important;filter:saturate(1.4) brightness(0.78)}
-.ict-label-txt.ict-highlight-label{fill-opacity:1 !important}
-
-/* Highlighted zone (FVG/OB/Breaker) — only fill becomes more saturated, no border */
-.ict-highlight-zone{fill-opacity:.45 !important;filter:saturate(1.3)}
 .chat-input-row{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--border)}
 .chat-input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:clamp(.58rem,.68vw,.74rem);padding:6px 8px;border-radius:3px;outline:none;resize:none;transition:border-color .15s}
 .chat-input:focus{border-color:var(--accent)}
@@ -317,7 +289,7 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 <header>
   <div class="hrow">
     <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-      <div class="logo">TX<em>Y</em>Z</div>
+      <div class="logo"><span class="brand">QALO</span><span class="tag">TRADING PLATFORM</span></div>
       <!-- LIVE PRICE -->
       <div class="live-price-wrap" id="livePriceWrap" style="display:none">
         <span class="live-price-sym" id="livePriceSym">BTC</span>
@@ -871,7 +843,7 @@ async function testTelegram(){
     tg.token=t;tg.chatId=c;
   }
   showTgStatus('Sending test message…','#8a8a85');
-  const ok=await sendTelegram('🟢 TXYZ connected!\n\nIf you see this, your Telegram alerts are working. You\'ll receive trade signals, level hits, and important updates here.',tg);
+  const ok=await sendTelegram('🟢 QALO connected!\n\nIf you see this, your Telegram alerts are working. You\'ll receive trade signals, level hits, and important updates here.',tg);
   if(ok){
     showTgStatus('✓ Test message sent — check your Telegram','#2a2a2a');
   } else {
@@ -2698,10 +2670,6 @@ function drawLiquidityLevels(){
         line.setAttribute('x2',lineEnd);line.setAttribute('y2',y);
         line.setAttribute('stroke',lineColor);
         line.setAttribute('stroke-width','1.2');
-        line.setAttribute('data-entity',label);
-        line.setAttribute('data-price',p.toFixed(2));
-        line.setAttribute('data-tf',k);
-        line.classList.add('ict-level');
         svg.appendChild(line);
         // label pill near right edge
         const labelW=26,labelH=13;
@@ -2712,10 +2680,6 @@ function drawLiquidityLevels(){
         bgRect.setAttribute('width',labelW);bgRect.setAttribute('height',labelH);
         bgRect.setAttribute('rx','2');bgRect.setAttribute('ry','2');
         bgRect.setAttribute('fill',labelBg);
-        bgRect.setAttribute('data-entity',label);
-        bgRect.setAttribute('data-price',p.toFixed(2));
-        bgRect.setAttribute('data-tf',k);
-        bgRect.classList.add('ict-label-bg');
         svg.appendChild(bgRect);
         const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
         txt.setAttribute('x',x+labelW/2);txt.setAttribute('y',y+1);
@@ -2726,20 +2690,14 @@ function drawLiquidityLevels(){
         txt.setAttribute('letter-spacing','0.3');
         txt.setAttribute('text-anchor','middle');
         txt.setAttribute('dominant-baseline','middle');
-        txt.setAttribute('data-entity',label);
-        txt.setAttribute('data-price',p.toFixed(2));
-        txt.setAttribute('data-tf',k);
-        txt.classList.add('ict-label-txt');
         txt.textContent=label;
         svg.appendChild(txt);
       };
 
       // M1 gets higher transparency — visual hints not bold lines
       const isM1=k==='M1';
-      // All TFs get the same low default opacity — visual hint only.
-      // Hovering an entity badge in chat will boost the matching element to full vividness.
-      const lineAlpha=0.4;
-      const labelAlpha=0.6;
+      const lineAlpha=isM1?0.45:0.7;
+      const labelAlpha=isM1?0.75:0.9;
 
       // ⚡ Liquidity (BSL/SSL) is sourced from 5M for ALL charts — these are the institutional levels that matter.
       // Falls back to current TF if 5M context not available.
@@ -2750,7 +2708,7 @@ function drawLiquidityLevels(){
       liqCtx.ssl.forEach(o=>drawLevel(o.price,o.time,'SSL',`rgba(140,80,110,${lineAlpha})`,`rgba(140,80,110,${labelAlpha})`));
 
       // ── FVG BOXES ── unfilled gaps as translucent rectangles
-      const drawZoneBox=(top,bot,time,isBull,solid,kind)=>{
+      const drawZoneBox=(top,bot,time,isBull,solid)=>{
         const yTop=series.priceToCoordinate(parseFloat(top));
         const yBot=series.priceToCoordinate(parseFloat(bot));
         if(yTop==null||yBot==null)return;
@@ -2764,19 +2722,14 @@ function drawLiquidityLevels(){
         rect.setAttribute('y',Math.min(yTop,yBot));
         rect.setAttribute('width',Math.max(0,lineEnd-xStart));
         rect.setAttribute('height',Math.abs(yBot-yTop));
-        rect.setAttribute('fill',isBull?'rgb(120,150,90)':'rgb(170,100,90)');
-        rect.setAttribute('fill-opacity','0.1');
-        rect.setAttribute('data-entity',kind||'FVG');
-        rect.setAttribute('data-top',parseFloat(top).toFixed(2));
-        rect.setAttribute('data-bot',parseFloat(bot).toFixed(2));
-        rect.setAttribute('data-tf',k);
-        rect.classList.add('ict-zone');
+        const fillA=isM1?0.08:0.18;
+        rect.setAttribute('fill',isBull?`rgba(120,150,90,${fillA})`:`rgba(170,100,90,${fillA})`);
         svg.appendChild(rect);
       };
 
       // FVG — dashed box
       if(fresh.fvgsRaw){
-        fresh.fvgsRaw.forEach(g=>drawZoneBox(g.top,g.bot,g.time,g.type==='BULL',false,'FVG'));
+        fresh.fvgsRaw.forEach(g=>drawZoneBox(g.top,g.bot,g.time,g.type==='BULL',false));
       }
 
       // OB — solid box (more important, often deeper zone)
@@ -2796,13 +2749,8 @@ function drawLiquidityLevels(){
           rect.setAttribute('y',Math.min(yTop,yBot));
           rect.setAttribute('width',Math.max(0,lineEnd-xStart));
           rect.setAttribute('height',Math.abs(yBot-yTop));
-          rect.setAttribute('fill',isBull?'rgb(80,130,170)':'rgb(180,130,80)');
-          rect.setAttribute('fill-opacity','0.12');
-          rect.setAttribute('data-entity','OB');
-          rect.setAttribute('data-top',parseFloat(o.top).toFixed(2));
-          rect.setAttribute('data-bot',parseFloat(o.bot).toFixed(2));
-          rect.setAttribute('data-tf',k);
-          rect.classList.add('ict-zone');
+          const obFill=isM1?0.1:0.22;
+          rect.setAttribute('fill',isBull?`rgba(80,130,170,${obFill})`:`rgba(180,130,80,${obFill})`);
           svg.appendChild(rect);
         });
       }
@@ -2823,25 +2771,14 @@ function drawLiquidityLevels(){
           rect.setAttribute('y',Math.min(yTop,yBot));
           rect.setAttribute('width',Math.max(0,lineEnd-xStart));
           rect.setAttribute('height',Math.max(2,Math.abs(yBot-yTop)));
-          rect.setAttribute('fill','rgb(140,100,160)');
-          rect.setAttribute('fill-opacity','0.1');
-          rect.setAttribute('data-entity','BRK');
-          rect.setAttribute('data-top',parseFloat(b.top).toFixed(2));
-          rect.setAttribute('data-bot',parseFloat(b.bot).toFixed(2));
-          rect.setAttribute('data-tf',k);
-          rect.classList.add('ict-zone');
+          rect.setAttribute('fill',isM1?'rgba(140,100,160,0.08)':'rgba(140,100,160,0.18)');
           svg.appendChild(rect);
         });
       }
     }
 
-    function redrawWithHighlight(){
-      redraw();
-      // immediately reapply any active hover highlight so it doesn't flicker
-      if(window._ictHoverState&&typeof applyIctHighlight==='function')applyIctHighlight();
-    }
-    redrawWithHighlight();
-    const timer=setInterval(redrawWithHighlight,1000);
+    redraw();
+    const timer=setInterval(redraw,1000);
     liquidityOverlays[k]={svg,timer,redraw};
   });
 
@@ -3324,141 +3261,6 @@ function setAgentStatus(s){
   else{dot.className='agent-dot';lbl.textContent='OFFLINE';}
 }
 
-// ── ICT ENTITY DECORATOR ─────────────────────────────────────────────────────
-// detects FVG/OB/BSL/SSL/Breaker/Entry/SL/TP mentions in agent text and wraps
-// them in clickable badges that highlight the corresponding chart element on hover.
-function decorateMsg(text){
-  // escape HTML first
-  let html=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-  // Range patterns first (so they're caught before single-price patterns):
-  // "Bear FVG 78650-78680" or "Bull FVG 78700 - 78730" or "FVG @ 78650-78680"
-  html=html.replace(/\b(Bull|Bear|BULL|BEAR)?\s*(FVG|fvg)\s*[@:]?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,pol,_kw,a,b)=>{
-    const isBull=/bull/i.test(pol||'');
-    const cls=isBull?'fvg-bull':'fvg-bear';
-    return `<span class="ict-tag ${cls}" data-kind="FVG" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">${pol?pol+' ':''}FVG ${a}-${b}</span>`;
-  });
-  html=html.replace(/\b(Bull|Bear|BULL|BEAR)?\s*(OB|ob|Order Block)\s*[@:]?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,pol,kw,a,b)=>{
-    const isBull=/bull/i.test(pol||'');
-    const cls=isBull?'ob-bull':'ob-bear';
-    return `<span class="ict-tag ${cls}" data-kind="OB" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">${pol?pol+' ':''}OB ${a}-${b}</span>`;
-  });
-  // Breaker — both range and single-price formats. Range first.
-  html=html.replace(/\b(Bull|Bear|BULL|BEAR)?\s*(Breaker|BRK|breaker block)\s*[@:]?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/gi,(m,pol,kw,a,b)=>{
-    return `<span class="ict-tag brk" data-kind="BRK" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">${pol?pol+' ':''}Breaker ${a}-${b}</span>`;
-  });
-  // Single-price Breaker — "BEAR BRK @78879" or "Breaker 78500"
-  html=html.replace(/\b(Bull|Bear|BULL|BEAR)?\s*(Breaker|BRK)\s*[@:]?\s*([0-9]{4,6}(?:\.[0-9]+)?)/gi,(m,pol,kw,p)=>{
-    return `<span class="ict-tag brk" data-kind="BRK" data-price="${(+p).toFixed(2)}">${pol?pol+' ':''}Breaker ${p}</span>`;
-  });
-
-  // Multi-value list: "BSL: 79000 (15M/5M), 80072, 80370" — split into individual tags.
-  // Approach: after the keyword + colon, scan numbers up to a sentence break (period, dash, parens-context end, newline).
-  // We tag each plausible price number with the appropriate tag class.
-  function multiTag(html,keyword,cls,kind){
-    const re=new RegExp(`\\b${keyword}\\s*:\\s*([^\\n.]*?)(?=\\s*[\\n.]|\\s+-\\s+\\b\\w|$)`,'g');
-    return html.replace(re,(match,body)=>{
-      // tag every 4-6 digit number as a price
-      const tagged=body.replace(/\b([0-9]{4,6}(?:\.[0-9]+)?)\b/g,(m,p)=>`<span class="ict-tag ${cls}" data-kind="${kind}" data-price="${(+p).toFixed(2)}">${keyword} ${p}</span>`);
-      return `${keyword}: ${tagged}`;
-    });
-  }
-  html=multiTag(html,'BSL','bsl','BSL');
-  html=multiTag(html,'SSL','ssl','SSL');
-
-  // Single BSL/SSL like "BSL 78900" or "BSL @ 78900" or "BSL at 78900" — only match if not already wrapped
-  html=html.replace(/\bBSL\s+(?:@|at)?\s*([0-9]{4,6}(?:\.[0-9]+)?)\b(?![^<]*<\/span>)/g,(m,p)=>{
-    return `<span class="ict-tag bsl" data-kind="BSL" data-price="${(+p).toFixed(2)}">BSL ${p}</span>`;
-  });
-  html=html.replace(/\bSSL\s+(?:@|at)?\s*([0-9]{4,6}(?:\.[0-9]+)?)\b(?![^<]*<\/span>)/g,(m,p)=>{
-    return `<span class="ict-tag ssl" data-kind="SSL" data-price="${(+p).toFixed(2)}">SSL ${p}</span>`;
-  });
-
-  // Entry/SL/TP keywords
-  html=html.replace(/\bentry\s*(?:@|at|:)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/gi,(m,p)=>`<span class="ict-tag entry" data-kind="ENTRY" data-price="${(+p).toFixed(2)}">Entry ${p}</span>`);
-  html=html.replace(/\bSL\s*(?:@|at|:)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,p)=>`<span class="ict-tag sl" data-kind="SL" data-price="${(+p).toFixed(2)}">SL ${p}</span>`);
-  html=html.replace(/\bTP\s*(?:@|at|:)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,p)=>`<span class="ict-tag tp" data-kind="TP" data-price="${(+p).toFixed(2)}">TP ${p}</span>`);
-
-  return html;
-}
-
-// hover/highlight handlers — find matching chart element by data-attrs
-// Stored globally so re-renders of charts can reapply the highlight without losing it.
-window._ictHoverState=null; // {kind, price?, top?, bot?}
-
-function applyIctHighlight(){
-  const state=window._ictHoverState;
-  const tol=0.0008;
-
-  // Walk all candidate elements and apply/remove classes only if state mismatches.
-  // This avoids flicker — we never wipe and reapply, we just sync.
-  document.querySelectorAll('.ict-level, .ict-zone, .ict-label-bg, .ict-label-txt').forEach(el=>{
-    let shouldHighlight=false;
-    if(state){
-      const elKind=el.dataset.entity;
-      if(state.price!=null&&(el.classList.contains('ict-level')||el.classList.contains('ict-label-bg')||el.classList.contains('ict-label-txt'))){
-        const linePrice=parseFloat(el.dataset.price);
-        if(state.kind===elKind&&Math.abs(linePrice-state.price)/linePrice<tol){
-          shouldHighlight=true;
-        }
-      } else if(state.top!=null&&state.bot!=null&&el.classList.contains('ict-zone')){
-        const zoneTop=parseFloat(el.dataset.top);
-        const zoneBot=parseFloat(el.dataset.bot);
-        if(state.kind===elKind&&Math.abs(zoneTop-state.top)/zoneTop<tol&&Math.abs(zoneBot-state.bot)/zoneBot<tol){
-          shouldHighlight=true;
-        }
-      }
-    }
-
-    if(el.classList.contains('ict-level')){
-      const has=el.classList.contains('ict-highlight');
-      if(shouldHighlight&&!has)el.classList.add('ict-highlight');
-      else if(!shouldHighlight&&has)el.classList.remove('ict-highlight');
-    } else if(el.classList.contains('ict-zone')){
-      const has=el.classList.contains('ict-highlight-zone');
-      if(shouldHighlight&&!has)el.classList.add('ict-highlight-zone');
-      else if(!shouldHighlight&&has)el.classList.remove('ict-highlight-zone');
-    } else if(el.classList.contains('ict-label-bg')||el.classList.contains('ict-label-txt')){
-      const has=el.classList.contains('ict-highlight-label');
-      if(shouldHighlight&&!has)el.classList.add('ict-highlight-label');
-      else if(!shouldHighlight&&has)el.classList.remove('ict-highlight-label');
-    }
-  });
-}
-
-function ictTagHover(tagEl,enable){
-  if(!enable){
-    window._ictHoverState=null;
-  } else {
-    const kind=tagEl.dataset.kind;
-    const state={kind};
-    if(tagEl.dataset.price)state.price=parseFloat(tagEl.dataset.price);
-    if(tagEl.dataset.top)state.top=parseFloat(tagEl.dataset.top);
-    if(tagEl.dataset.bot)state.bot=parseFloat(tagEl.dataset.bot);
-    window._ictHoverState=state;
-  }
-  applyIctHighlight();
-}
-
-// Reapply highlight after each chart redraw (charts redraw their SVG overlays every ~500ms,
-// which would otherwise wipe the highlight class).
-setInterval(()=>{
-  if(window._ictHoverState)applyIctHighlight();
-},250);
-
-// attach hover delegates once
-if(!window._ictHoverBound){
-  window._ictHoverBound=true;
-  document.addEventListener('mouseover',e=>{
-    const tag=e.target.closest?.('.ict-tag');
-    if(tag)ictTagHover(tag,true);
-  });
-  document.addEventListener('mouseout',e=>{
-    const tag=e.target.closest?.('.ict-tag');
-    if(tag)ictTagHover(tag,false);
-  });
-}
-
 function addMsgToChat(text,role='agent'){
   const el=document.getElementById('chatMessages');
   const empty=el.querySelector('.chat-empty');if(empty)empty.remove();
@@ -3473,12 +3275,7 @@ function addMsgToChat(text,role='agent'){
     timeEl.style.cssText='font-size:.5rem;color:var(--muted);margin-right:6px;font-family:var(--mono);opacity:.6';
     timeEl.textContent=time;
     const txtEl=document.createElement('span');
-    // decorate agent messages with ICT entity badges; user messages stay plain text
-    if(role==='agent'){
-      txtEl.innerHTML=decorateMsg(text);
-    } else {
-      txtEl.textContent=text;
-    }
+    txtEl.textContent=text;
     d.appendChild(timeEl);
     d.appendChild(txtEl);
   }
@@ -3614,16 +3411,7 @@ async function sendChat(){
     detectTradeEvents(raw);
     const chatLevels=extractLevelsFromText(raw);
     if(chatLevels.length)setWatchedLevels([...S.watchedLevels,...chatLevels].slice(0,15));
-    thinking.className='msg agent';
-    thinking.innerHTML='';
-    const time=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
-    const timeEl=document.createElement('span');
-    timeEl.style.cssText='font-size:.5rem;color:var(--muted);margin-right:6px;font-family:var(--mono);opacity:.6';
-    timeEl.textContent=time;
-    const txtEl=document.createElement('span');
-    txtEl.innerHTML=decorateMsg(display);
-    thinking.appendChild(timeEl);
-    thinking.appendChild(txtEl);
+    thinking.className='msg agent';thinking.textContent=display;
   }catch(e){thinking.className='msg agent';thinking.textContent='Error: '+e.message;}
   document.getElementById('chatSend').disabled=false;
   document.getElementById('chatMessages').scrollTop=99999;
