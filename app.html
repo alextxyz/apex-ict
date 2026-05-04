@@ -2881,9 +2881,9 @@ function buildMarketSummary(){
 ↑ Any TRADE:: entry MUST be within 0.05% of this price (or be a pending limit at unreached level).
 
 ICT STRUCTURE — THESE LEVELS ARE DRAWN ON THE TRADER'S CHART (you must reference them):
-15M: price=${m15.last}|${m15.pd.pos} ${m15.pd.pct}%|SwHi:${m15.swHi.join(',')}|SwLo:${m15.swLo.join(',')}|BSL:${m15.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m15.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m15.fvgs.join('|')||'none'}|OB:${m15.obs.join('|')||'none'}
+15M: price=${m15.last}|${m15.pd.pos} ${m15.pd.pct}%|SwHi:${m15.swHi.join(',')}|SwLo:${m15.swLo.join(',')}|FVG:${m15.fvgs.join('|')||'none'}|OB:${m15.obs.join('|')||'none'}
 5M: price=${m5.last}|${m5.pd.pos} ${m5.pd.pct}%|SwHi:${m5.swHi.join(',')}|SwLo:${m5.swLo.join(',')}|BSL:${m5.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m5.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m5.fvgs.join('|')||'none'}|OB:${m5.obs.join('|')||'none'}|BRK:${m5.brk.join('|')||'none'}
-1M: price=${m1.last}|${m1.pd.pos} ${m1.pd.pct}%|BSL:${m1.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m1.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m1.fvgs.join('|')||'none'}|OB:${m1.obs.join('|')||'none'}|BRK:${m1.brk.join('|')||'none'}
+1M: price=${m1.last}|${m1.pd.pos} ${m1.pd.pct}%|FVG:${m1.fvgs.join('|')||'none'}|OB:${m1.obs.join('|')||'none'}|BRK:${m1.brk.join('|')||'none'}
 
 ⚡ The trader SEES these zones DRAWN ON ALL 3 CHARTS (15M, 5M, 1M). When you reason, REFERENCE them by price.
 - **BSL/SSL liquidity lines** are sourced from the **5M timeframe** and shown on all three charts (consistent across all panels — these are the institutional liquidity levels that matter for scalping).
