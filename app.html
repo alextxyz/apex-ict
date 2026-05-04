@@ -1503,7 +1503,8 @@ function restoreSession(){
         if(m.content?.startsWith?.('[SYSTEM]'))return;
         if(m.role==='user'){
           if(m.content?.includes?.('just started monitoring'))return;
-          if(m.content?.includes?.('just updated. Look for'))return;
+          if(m.content?.includes?.('just updated.'))return;
+          if(m.content?.includes?.('Trade is OPEN:'))return;
           addMsgToChat(m.content,'user');
         } else if(m.role==='assistant'){
           const display=m.content.replace(/TRADE::(LONG|SHORT|NONE)[^\n]*/g,'').trim();
@@ -3028,7 +3029,18 @@ ICT STRUCTURE — THESE LEVELS ARE DRAWN ON THE TRADER'S CHART (you must referen
 Use 15M for bias, 5M for confirmation, 1M for the exact entry trigger.
 
 🚨 ABSOLUTE RULE — NEVER INVENT LEVELS:
-You MUST use ONLY the BSL/SSL/FVG/OB/Breaker prices that are explicitly listed in the market context above. NEVER make up your own levels (e.g. "BSL at 80188" when 80188 is not in the BSL list provided).
+You MUST use ONLY the BSL/SSL/FVG/OB/Breaker prices that are explicitly listed in the CURRENT market context above. NEVER make up your own levels (e.g. "BSL at 80188" when 80188 is not in the BSL list provided).
+
+⚠ CRITICAL — IGNORE PAST LEVELS FROM CHAT HISTORY:
+You may have mentioned levels in PREVIOUS messages that are no longer valid (e.g. they were swept, filtered out, or invalid). The CURRENT market context is the ONLY source of truth. If a level you cited 5 minutes ago is no longer in the current BSL/SSL list, it does NOT exist anymore. DO NOT reuse stale levels from earlier in the chat.
+
+ENFORCEMENT TEST before citing any BSL/SSL price:
+1. Look at the CURRENT MARKET DATA section above
+2. Find the line "5M: ... | BSL: X,Y,Z | SSL: A,B,C"
+3. The price you want to cite MUST be in {X, Y, Z} (for BSL) or {A, B, C} (for SSL)
+4. If it's NOT in the current list → DO NOT call it BSL/SSL. Either:
+   - Don't mention that level at all, OR
+   - Call it "round level" / "local micro-high" / "previous swept zone" — never "BSL"/"SSL"
 
 The trader is looking at the SAME charts you're reasoning about. If you cite a level the trader can't see drawn on the chart, you destroy their trust and confuse them.
 
@@ -3093,6 +3105,55 @@ ${journal?`History: ${journal.winRate}% WR (${journal.wins}W/${journal.losses}L)
 TODAY: ${dailyStats.trades} trades | ${dailyStats.totalR>=0?'+':''}${dailyStats.totalR.toFixed(2)}R | ${dailyStats.wins}W/${dailyStats.losses}L
 
 ACTIVE TRADE STATUS: ${activeTrade?`OPEN ${activeTrade.dir} @ ${activeTrade.entry} (SL ${activeTrade.sl} / TP ${activeTrade.tp})`:'NO ACTIVE TRADE — looking for fresh setups'}
+
+${activeTrade?`═══ TRADE HEALTH ANALYSIS (do this every cycle while trade is open) ═══
+
+When a trade is OPEN, your job is NOT just "is price near SL/TP?". Continuously assess whether the trade is GETTING STRONGER or WEAKER based on what's forming on the chart.
+
+🟢 SIGNS THE TRADE IS STRENGTHENING (report these explicitly):
+- New FVG formed in trade direction below entry (for SHORT) / above entry (for LONG) → "Bear FVG @X-Y formed below entry confirms bearish displacement, trade strengthening"
+- New OB formed in trade direction (Bear OB above entry for SHORT, Bull OB below entry for LONG)
+- Breaker Block validated — price came back to a previous opposing OB and rejected
+- New BOS in trade direction on 1M (lower low for SHORT, higher high for LONG)
+- HTF FVG/OB tap acting as resistance (for SHORT) / support (for LONG)
+- Volume on impulse moves (drops for SHORT, pumps for LONG) is high
+- Funding rate aligning with trade direction (negative funding while LONG / positive funding while SHORT can still work, but neutral/aligned is best)
+- Liquidity below SSL (for SHORT) / above BSL (for LONG) is fresh and untapped — clear target
+- Equal highs/lows untouched in trade direction (resting liquidity confirming the magnet)
+
+🔴 SIGNS THE TRADE IS WEAKENING (warn the trader):
+- BOS against trade direction on 1M (higher high for SHORT, lower low for LONG)
+- Bullish FVG forming above price (for SHORT) / Bearish FVG forming below price (for LONG)
+- Bullish OB / Breaker forming inside the trade range (acts as support for SHORT, resistance for LONG)
+- HTF level swept and rejected against trade direction
+- Multiple failed pushes toward TP (price stalling, can't make new low/high)
+- Time-based weakness: trade open >20 minutes without progress = momentum lost
+- Major HTF FVG/OB in the path between current price and TP that could reject
+
+🟡 NEUTRAL / WAIT-AND-SEE:
+- Price consolidating between entry and a minor level
+- Liquidity grab in either direction without follow-through
+- Pre-news / pre-FOMC silence
+
+📋 MANAGEMENT ACTIONS to suggest:
+- "Move SL to BE" → when 1M structure has shifted firmly in trade direction (BOS confirmed + 1R reached)
+- "Hold — let it run" → trade healthy, structure aligned, target intact
+- "Consider partial close" → strong rejection at major HTF level mid-way
+- "Watch carefully" → mixed signals, could go either way
+- "Exit early" → BOS against trade direction OR HTF level swept against you with displacement
+
+🎯 OUTPUT FORMAT (when trade is open):
+Reply with 1-2 sentences identifying CURRENT STRUCTURE STATE + RECOMMENDATION:
+- State if trade is STRENGTHENING / WEAKENING / NEUTRAL based on what you see RIGHT NOW
+- Mention the specific element (FVG/OB/BOS/sweep) that supports your read
+- Recommend action: hold / move-SL-BE / partial-close / exit
+- ALWAYS end with "TRADE::NONE" — never open a new trade while one is active
+
+Examples:
+✓ "1M Bear FVG 80050-80200 just formed below entry confirming bearish displacement, trade strengthening — hold and watch for SSL 80207 sweep. TRADE::NONE"
+✓ "Price made higher high on 1M breaking BOS against SHORT, structure shifting bullish — consider exiting early before SL hit. TRADE::NONE"
+✓ "Consolidating between entry and SL with no clear displacement, trade neutral — hold but tighten attention. TRADE::NONE"
+`:''}
 
 ═══ ICT 2022 FRAMEWORK (full methodology, no time restrictions) ═══
 
@@ -3486,9 +3547,27 @@ async function runAnalysis(isAuto=false){
   S.marketContext=ctx;
   const isFirst=!prevCtx;
   const liveLevels=`(Live BSL: ${m5c?.bsl.map(o=>o.price).join(',')||'—'} | Live SSL: ${m5c?.ssl.map(o=>o.price).join(',')||'—'})`;
-  const prompt=isFirst
-    ?`I just started monitoring ${document.getElementById('pairSelect').value}. Give me an immediate scalp read — HTF bias and any tradeable setup forming right now. ${liveLevels} Use ONLY these levels — do not invent your own. If you see a valid setup, call it with TRADE::. Max 2 sentences.`
-    :`${document.getElementById('pairSelect').value} just updated. ${liveLevels} Use ONLY these levels — any number you cite as BSL/SSL must be in the list. Look for sweep, BOS, FVG fill, OB tap. If you see ANY tradeable opportunity, call it with TRADE::. Otherwise reply ONLY with "No change." Max 2 sentences.`;
+  let prompt;
+  if(activeTrade){
+    // trade-management mode — focus entirely on health analysis
+    prompt=`${document.getElementById('pairSelect').value} just updated. Trade is OPEN: ${activeTrade.dir} @ ${activeTrade.entry} (SL ${activeTrade.sl} / TP ${activeTrade.tp}). ${liveLevels}
+
+Run TRADE HEALTH ANALYSIS now: is the trade STRENGTHENING, WEAKENING, or NEUTRAL? Look for:
+- New FVG/OB/Breaker forming in trade direction (strengthens) or against (weakens)
+- BOS in/against trade direction on 1M
+- HTF level taps confirming or rejecting the thesis
+- Volume / momentum on impulse moves
+
+Cite the SPECIFIC element you see (e.g. "1M Bear FVG 80050-80200 below entry confirms displacement"). Recommend: hold / move-SL-BE / partial / exit-early.
+
+⚠ CRITICAL: Use ONLY the BSL/SSL prices in ${liveLevels}. If you mentioned a level in a previous message that is NOT in the current list, DO NOT cite it — it's stale (already swept or filtered). Stick to what's CURRENTLY visible.
+
+End with TRADE::NONE. Max 2 sentences.`;
+  } else if(isFirst){
+    prompt=`I just started monitoring ${document.getElementById('pairSelect').value}. Give me an immediate scalp read — HTF bias and any tradeable setup forming right now. ${liveLevels} Use ONLY these levels — do not invent your own. If you see a valid setup, call it with TRADE::. Max 2 sentences.`;
+  } else {
+    prompt=`${document.getElementById('pairSelect').value} just updated. ${liveLevels} Use ONLY these levels — any number you cite as BSL/SSL must be in the list. Look for sweep, BOS, FVG fill, OB tap. If you see ANY tradeable opportunity, call it with TRADE::. Otherwise reply ONLY with "No change." Max 2 sentences.`;
+  }
   S.chatHistory.push({role:'user',content:prompt});
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
