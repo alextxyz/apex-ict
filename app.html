@@ -1546,6 +1546,15 @@ function clearSavedSession(){
 }
 
 setInterval(()=>{if(S.running)saveSession();},5000);
+// CRITICAL: save synchronously before page unload so an open trade isn't lost on refresh
+window.addEventListener('beforeunload',()=>{
+  try{
+    if(activeTrade){
+      console.log('[BEFORE UNLOAD] saving active trade:',activeTrade);
+      saveSession();
+    }
+  }catch(e){}
+});
 
 function getJournalKey(){return `txyz_journal_${apexUser}`;}
 function loadJournal(){
@@ -1866,7 +1875,7 @@ async function triggerLevelAlert(lvl,price){
     S.chatHistory.push({role:'assistant',content:raw});
     if(S.chatHistory.length>40)S.chatHistory=S.chatHistory.slice(-40);
     const trade=parseTrade(raw);
-    if(trade&&trade.dir!=='NONE')updateTradeBox(trade);
+    if(trade&&trade.dir!=='NONE'){updateTradeBox(trade);saveSession();}
     addMsgToChat(display,'agent');
     showPopup(`⚡ ${lvl.label} HIT\n${display}`,'alert',12000);
     sendTelegram(`⚡ <b>LEVEL HIT: ${lvl.label}</b>\n\nPrice: ${price.toFixed(2)}\n\n${display}`);
@@ -3116,6 +3125,15 @@ TODAY: ${dailyStats.trades} trades | ${dailyStats.totalR>=0?'+':''}${dailyStats.
 
 ACTIVE TRADE STATUS: ${activeTrade?`OPEN ${activeTrade.dir} @ ${activeTrade.entry} (SL ${activeTrade.sl} / TP ${activeTrade.tp})`:'NO ACTIVE TRADE — looking for fresh setups'}
 
+🚨 RULE — DO NOT FABRICATE PAST TRADE OUTCOMES:
+You have NO knowledge of past trade results unless explicitly told via [SYSTEM] messages or the trading history stats above. If the user asks "did that trade hit TP?" or "what happened to the trade?", and you don't have explicit data:
+- DO NOT guess, invent outcomes, or assume "it hit TP" or "it closed in profit"
+- Reply honestly: "I don't have visibility on whether that trade closed or hit TP/SL. The system tracks closures automatically — check the trade panel or journal for actual outcomes."
+- Only reference past trades by exact entry/SL/TP values that are in your context.
+
+If you're unsure about ANY past event, say so. Inventing a "successful TP hit" that didn't happen is the worst possible failure mode.
+
+
 ${activeTrade?`═══ TRADE HEALTH ANALYSIS (do this every cycle while trade is open) ═══
 
 When a trade is OPEN, your job is NOT just "is price near SL/TP?". Continuously assess whether the trade is GETTING STRONGER or WEAKER based on what's forming on the chart.
@@ -3603,7 +3621,11 @@ If a clear setup is pending, ALWAYS use response #2 (don't just say "No change")
     if(S.chatHistory.length>40)S.chatHistory=S.chatHistory.slice(-40);
     const trade=parseTrade(raw);
     const hasTrade=trade&&trade.dir!=='NONE';
-    if(hasTrade)updateTradeBox(trade);
+    if(hasTrade){
+      updateTradeBox(trade);
+      saveSession(); // CRITICAL: save immediately so refresh within 5s doesn't lose the trade
+      console.log('[NEW TRADE] saved immediately:',activeTrade);
+    }
     const noChange=/^no change\.?$/i.test(display.trim())||display.toLowerCase().startsWith('no change');
     if(isAuto&&noChange){/* silent */}
     else{
@@ -3651,7 +3673,11 @@ async function sendChat(){
     S.chatHistory.push({role:'assistant',content:raw});
     if(S.chatHistory.length>40)S.chatHistory=S.chatHistory.slice(-40);
     const trade=parseTrade(raw);
-    if(trade&&trade.dir!=='NONE'){updateTradeBox(trade);showPopup(display,'trade');}
+    if(trade&&trade.dir!=='NONE'){
+      updateTradeBox(trade);
+      saveSession();
+      showPopup(display,'trade');
+    }
     // detect breakeven instruction
     detectTradeEvents(raw);
     const chatLevels=extractLevelsFromText(raw);
@@ -4336,7 +4362,7 @@ async function updateConviction(){
 
     // update trade if agent sends new levels
     const trade=parseTrade(raw);
-    if(trade&&trade.dir!=='NONE')updateTradeBox(trade);
+    if(trade&&trade.dir!=='NONE'){updateTradeBox(trade);saveSession();}
 
     addMsgToChat(display,'agent');
 
