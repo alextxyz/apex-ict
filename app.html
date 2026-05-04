@@ -142,9 +142,15 @@ select{background:var(--bg);border:1px solid var(--border);color:var(--text);fon
 .ict-tag.tp{background:rgba(90,140,80,.18);color:rgb(60,110,55);border-color:rgba(90,140,80,.5)}
 .ict-tag.sl{background:rgba(180,90,70,.18);color:rgb(150,60,50);border-color:rgba(180,90,70,.5)}
 
-/* Chart-side highlighted state */
-.ict-highlight{stroke-width:3 !important;filter:drop-shadow(0 0 6px currentColor)}
-.ict-highlight-zone{stroke:#1a1a1a !important;stroke-width:2 !important;stroke-dasharray:4,2}
+/* Default state — chart elements have transition for smooth highlight */
+.ict-level{transition:stroke-width .2s,stroke-opacity .2s,filter .2s}
+.ict-zone{transition:fill-opacity .2s,stroke-width .2s,filter .2s}
+
+/* Highlighted line (BSL/SSL) — thicker, full saturation */
+.ict-highlight{stroke-width:3 !important;stroke-opacity:1 !important;filter:drop-shadow(0 0 5px currentColor) brightness(1.15)}
+
+/* Highlighted zone (FVG/OB/Breaker) — opacity boosted, dark dashed border */
+.ict-highlight-zone{fill-opacity:.55 !important;stroke:#1a1a1a !important;stroke-width:1.5 !important;stroke-dasharray:5,3;filter:brightness(1.1)}
 .chat-input-row{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--border)}
 .chat-input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:clamp(.58rem,.68vw,.74rem);padding:6px 8px;border-radius:3px;outline:none;resize:none;transition:border-color .15s}
 .chat-input:focus{border-color:var(--accent)}
@@ -2716,8 +2722,10 @@ function drawLiquidityLevels(){
 
       // M1 gets higher transparency — visual hints not bold lines
       const isM1=k==='M1';
-      const lineAlpha=isM1?0.45:0.7;
-      const labelAlpha=isM1?0.75:0.9;
+      // All TFs get the same low default opacity — visual hint only.
+      // Hovering an entity badge in chat will boost the matching element to full vividness.
+      const lineAlpha=0.4;
+      const labelAlpha=0.6;
 
       // ⚡ Liquidity (BSL/SSL) is sourced from 5M for ALL charts — these are the institutional levels that matter.
       // Falls back to current TF if 5M context not available.
@@ -2742,7 +2750,7 @@ function drawLiquidityLevels(){
         rect.setAttribute('y',Math.min(yTop,yBot));
         rect.setAttribute('width',Math.max(0,lineEnd-xStart));
         rect.setAttribute('height',Math.abs(yBot-yTop));
-        const fillA=isM1?0.08:0.18;
+        const fillA=0.08;
         rect.setAttribute('fill',isBull?`rgba(120,150,90,${fillA})`:`rgba(170,100,90,${fillA})`);
         rect.setAttribute('data-entity',kind||'FVG');
         rect.setAttribute('data-top',parseFloat(top).toFixed(2));
@@ -2774,7 +2782,7 @@ function drawLiquidityLevels(){
           rect.setAttribute('y',Math.min(yTop,yBot));
           rect.setAttribute('width',Math.max(0,lineEnd-xStart));
           rect.setAttribute('height',Math.abs(yBot-yTop));
-          const obFill=isM1?0.1:0.22;
+          const obFill=0.1;
           rect.setAttribute('fill',isBull?`rgba(80,130,170,${obFill})`:`rgba(180,130,80,${obFill})`);
           rect.setAttribute('data-entity','OB');
           rect.setAttribute('data-top',parseFloat(o.top).toFixed(2));
@@ -2801,7 +2809,7 @@ function drawLiquidityLevels(){
           rect.setAttribute('y',Math.min(yTop,yBot));
           rect.setAttribute('width',Math.max(0,lineEnd-xStart));
           rect.setAttribute('height',Math.max(2,Math.abs(yBot-yTop)));
-          rect.setAttribute('fill',isM1?'rgba(140,100,160,0.08)':'rgba(140,100,160,0.18)');
+          rect.setAttribute('fill','rgba(140,100,160,0.08)');
           rect.setAttribute('data-entity','BRK');
           rect.setAttribute('data-top',parseFloat(b.top).toFixed(2));
           rect.setAttribute('data-bot',parseFloat(b.bot).toFixed(2));
@@ -3333,43 +3341,62 @@ function decorateMsg(text){
 }
 
 // hover/highlight handlers — find matching chart element by data-attrs
-function ictTagHover(tagEl,enable){
-  const kind=tagEl.dataset.kind;
-  const price=tagEl.dataset.price;
-  const top=tagEl.dataset.top;
-  const bot=tagEl.dataset.bot;
-  const tol=0.0005; // 0.05% tolerance for fuzzy matching
+// Stored globally so re-renders of charts can reapply the highlight without losing it.
+window._ictHoverState=null; // {kind, price?, top?, bot?}
 
-  // find matching chart elements across all charts
+function applyIctHighlight(){
+  const state=window._ictHoverState;
+  // first remove any existing highlight
+  document.querySelectorAll('.ict-highlight, .ict-highlight-zone').forEach(el=>{
+    el.classList.remove('ict-highlight');
+    el.classList.remove('ict-highlight-zone');
+  });
+  if(!state)return;
+  const {kind,price,top,bot}=state;
+  const tol=0.0008; // slightly looser fuzzy match (0.08%)
+
   document.querySelectorAll('.ict-level, .ict-zone').forEach(el=>{
     let match=false;
-    if(price&&el.classList.contains('ict-level')){
-      // line match
+    if(price!=null&&el.classList.contains('ict-level')){
       const lineKind=el.dataset.entity;
       const linePrice=parseFloat(el.dataset.price);
-      if(kind===lineKind&&Math.abs(linePrice-parseFloat(price))/linePrice<tol){
+      if(kind===lineKind&&Math.abs(linePrice-price)/linePrice<tol){
         match=true;
       }
-    } else if(top&&bot&&el.classList.contains('ict-zone')){
-      // zone match — kind FVG/OB/BRK
+    } else if(top!=null&&bot!=null&&el.classList.contains('ict-zone')){
       const zoneKind=el.dataset.entity;
       const zoneTop=parseFloat(el.dataset.top);
       const zoneBot=parseFloat(el.dataset.bot);
-      if(kind===zoneKind&&Math.abs(zoneTop-parseFloat(top))/zoneTop<tol&&Math.abs(zoneBot-parseFloat(bot))/zoneBot<tol){
+      if(kind===zoneKind&&Math.abs(zoneTop-top)/zoneTop<tol&&Math.abs(zoneBot-bot)/zoneBot<tol){
         match=true;
       }
     }
     if(match){
-      if(enable){
-        if(el.classList.contains('ict-level'))el.classList.add('ict-highlight');
-        else el.classList.add('ict-highlight-zone');
-      } else {
-        el.classList.remove('ict-highlight');
-        el.classList.remove('ict-highlight-zone');
-      }
+      if(el.classList.contains('ict-level'))el.classList.add('ict-highlight');
+      else el.classList.add('ict-highlight-zone');
     }
   });
 }
+
+function ictTagHover(tagEl,enable){
+  if(!enable){
+    window._ictHoverState=null;
+  } else {
+    const kind=tagEl.dataset.kind;
+    const state={kind};
+    if(tagEl.dataset.price)state.price=parseFloat(tagEl.dataset.price);
+    if(tagEl.dataset.top)state.top=parseFloat(tagEl.dataset.top);
+    if(tagEl.dataset.bot)state.bot=parseFloat(tagEl.dataset.bot);
+    window._ictHoverState=state;
+  }
+  applyIctHighlight();
+}
+
+// Reapply highlight after each chart redraw (charts redraw their SVG overlays every ~500ms,
+// which would otherwise wipe the highlight class).
+setInterval(()=>{
+  if(window._ictHoverState)applyIctHighlight();
+},250);
 
 // attach hover delegates once
 if(!window._ictHoverBound){
