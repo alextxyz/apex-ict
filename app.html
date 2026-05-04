@@ -3333,24 +3333,46 @@ function decorateMsg(text){
 
   // Range patterns first (so they're caught before single-price patterns):
   // "Bear FVG 78650-78680" or "Bull FVG 78700 - 78730" or "FVG @ 78650-78680"
-  html=html.replace(/\b(Bull|Bear)?\s*(FVG|fvg)\s*@?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,pol,_kw,a,b)=>{
+  html=html.replace(/\b(Bull|Bear|BULL|BEAR)?\s*(FVG|fvg)\s*[@:]?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,pol,_kw,a,b)=>{
     const isBull=/bull/i.test(pol||'');
     const cls=isBull?'fvg-bull':'fvg-bear';
     return `<span class="ict-tag ${cls}" data-kind="FVG" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">${pol?pol+' ':''}FVG ${a}-${b}</span>`;
   });
-  html=html.replace(/\b(Bull|Bear)?\s*(OB|ob|Order Block)\s*@?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,pol,kw,a,b)=>{
+  html=html.replace(/\b(Bull|Bear|BULL|BEAR)?\s*(OB|ob|Order Block)\s*[@:]?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,pol,kw,a,b)=>{
     const isBull=/bull/i.test(pol||'');
     const cls=isBull?'ob-bull':'ob-bear';
     return `<span class="ict-tag ${cls}" data-kind="OB" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">${pol?pol+' ':''}OB ${a}-${b}</span>`;
   });
-  html=html.replace(/\b(Breaker|BRK|breaker block)\s*@?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/gi,(m,kw,a,b)=>{
-    return `<span class="ict-tag brk" data-kind="BRK" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">Breaker ${a}-${b}</span>`;
+  // Breaker — both range and single-price formats. Range first.
+  html=html.replace(/\b(Bull|Bear|BULL|BEAR)?\s*(Breaker|BRK|breaker block)\s*[@:]?\s*([0-9]{4,6}(?:\.[0-9]+)?)\s*[-–]\s*([0-9]{4,6}(?:\.[0-9]+)?)/gi,(m,pol,kw,a,b)=>{
+    return `<span class="ict-tag brk" data-kind="BRK" data-bot="${Math.min(+a,+b).toFixed(2)}" data-top="${Math.max(+a,+b).toFixed(2)}">${pol?pol+' ':''}Breaker ${a}-${b}</span>`;
+  });
+  // Single-price Breaker — "BEAR BRK @78879" or "Breaker 78500"
+  html=html.replace(/\b(Bull|Bear|BULL|BEAR)?\s*(Breaker|BRK)\s*[@:]?\s*([0-9]{4,6}(?:\.[0-9]+)?)/gi,(m,pol,kw,p)=>{
+    return `<span class="ict-tag brk" data-kind="BRK" data-price="${(+p).toFixed(2)}">${pol?pol+' ':''}Breaker ${p}</span>`;
   });
 
-  // Single-price patterns:
-  // "BSL @ 78900" or "BSL 78900" or "BSL at 78900"
-  html=html.replace(/\bBSL\s*(?:@|at)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,p)=>`<span class="ict-tag bsl" data-kind="BSL" data-price="${(+p).toFixed(2)}">BSL ${p}</span>`);
-  html=html.replace(/\bSSL\s*(?:@|at)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/g,(m,p)=>`<span class="ict-tag ssl" data-kind="SSL" data-price="${(+p).toFixed(2)}">SSL ${p}</span>`);
+  // Multi-value list: "BSL: 79000 (15M/5M), 80072, 80370" — split into individual tags.
+  // Approach: after the keyword + colon, scan numbers up to a sentence break (period, dash, parens-context end, newline).
+  // We tag each plausible price number with the appropriate tag class.
+  function multiTag(html,keyword,cls,kind){
+    const re=new RegExp(`\\b${keyword}\\s*:\\s*([^\\n.]*?)(?=\\s*[\\n.]|\\s+-\\s+\\b\\w|$)`,'g');
+    return html.replace(re,(match,body)=>{
+      // tag every 4-6 digit number as a price
+      const tagged=body.replace(/\b([0-9]{4,6}(?:\.[0-9]+)?)\b/g,(m,p)=>`<span class="ict-tag ${cls}" data-kind="${kind}" data-price="${(+p).toFixed(2)}">${keyword} ${p}</span>`);
+      return `${keyword}: ${tagged}`;
+    });
+  }
+  html=multiTag(html,'BSL','bsl','BSL');
+  html=multiTag(html,'SSL','ssl','SSL');
+
+  // Single BSL/SSL like "BSL 78900" or "BSL @ 78900" or "BSL at 78900" — only match if not already wrapped
+  html=html.replace(/\bBSL\s+(?:@|at)?\s*([0-9]{4,6}(?:\.[0-9]+)?)\b(?![^<]*<\/span>)/g,(m,p)=>{
+    return `<span class="ict-tag bsl" data-kind="BSL" data-price="${(+p).toFixed(2)}">BSL ${p}</span>`;
+  });
+  html=html.replace(/\bSSL\s+(?:@|at)?\s*([0-9]{4,6}(?:\.[0-9]+)?)\b(?![^<]*<\/span>)/g,(m,p)=>{
+    return `<span class="ict-tag ssl" data-kind="SSL" data-price="${(+p).toFixed(2)}">SSL ${p}</span>`;
+  });
 
   // Entry/SL/TP keywords
   html=html.replace(/\bentry\s*(?:@|at|:)?\s*([0-9]{4,6}(?:\.[0-9]+)?)/gi,(m,p)=>`<span class="ict-tag entry" data-kind="ENTRY" data-price="${(+p).toFixed(2)}">Entry ${p}</span>`);
