@@ -3345,9 +3345,10 @@ async function runAnalysis(isAuto=false){
   const prevCtx=S.marketContext;
   S.marketContext=ctx;
   const isFirst=!prevCtx;
+  const liveLevels=`(Live BSL: ${m5c?.bsl.map(o=>o.price).join(',')||'—'} | Live SSL: ${m5c?.ssl.map(o=>o.price).join(',')||'—'})`;
   const prompt=isFirst
-    ?`I just started monitoring ${document.getElementById('pairSelect').value}. Give me an immediate scalp read — HTF bias and any tradeable setup forming right now. If you see a valid setup, call it with TRADE::. Max 2 sentences.`
-    :`${document.getElementById('pairSelect').value} just updated. Look for ANY new setup forming — sweep, BOS, FVG fill, OB tap. If you see ANY tradeable opportunity, call it with TRADE::. Otherwise reply ONLY with "No change." Max 2 sentences.`;
+    ?`I just started monitoring ${document.getElementById('pairSelect').value}. Give me an immediate scalp read — HTF bias and any tradeable setup forming right now. ${liveLevels} Use ONLY these levels — do not invent your own. If you see a valid setup, call it with TRADE::. Max 2 sentences.`
+    :`${document.getElementById('pairSelect').value} just updated. ${liveLevels} Use ONLY these levels — any number you cite as BSL/SSL must be in the list. Look for sweep, BOS, FVG fill, OB tap. If you see ANY tradeable opportunity, call it with TRADE::. Otherwise reply ONLY with "No change." Max 2 sentences.`;
   S.chatHistory.push({role:'user',content:prompt});
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
