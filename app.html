@@ -1582,6 +1582,8 @@ function logTradeToJournal(trade,outcome,exitPrice,pnlPct){
 
     // ICT setup context
     setupType, // sweep / BOS / FVG / OB
+    grade:trade.grade||null, // A+, A, Turtle A, or null
+    reasoning:trade.reasoning||null,
     convAtEntry:trade.convAtEntry||null,
 
     // HTF bias snapshot
@@ -1666,6 +1668,108 @@ function getJournalSummary(){
     bestSetup,bestSession,
     last:recent[recent.length-1],
   };
+}
+
+// ── AGENT MEMORY — auto-built from journal, injected into system prompt ──────
+// Tracks personal trading patterns so the agent learns what works for THIS user
+// across sessions, even though it has no native memory.
+function buildAgentMemory(){
+  const j=loadJournal();
+  if(!j||j.length<3)return null; // need at least 3 trades to draw any pattern
+  const recent=j.slice(-30); // last 30 trades
+
+  // overall win rate
+  const wins=recent.filter(t=>t.outcome==='TP').length;
+  const losses=recent.filter(t=>t.outcome==='SL').length;
+  const bes=recent.filter(t=>t.outcome==='BE').length;
+  const total=recent.length;
+  const winRate=total?Math.round((wins/total)*100):0;
+  const totalR=recent.reduce((a,t)=>a+(parseFloat(t.rMultiple)||0),0);
+  const avgR=total?(totalR/total).toFixed(2):0;
+
+  // by grade — A+, A, Turtle A
+  const byGrade={};
+  recent.forEach(t=>{
+    const g=t.grade||'unknown';
+    if(!byGrade[g])byGrade[g]={wins:0,losses:0,bes:0,total:0,r:0};
+    byGrade[g].total++;
+    byGrade[g].r+=parseFloat(t.rMultiple)||0;
+    if(t.outcome==='TP')byGrade[g].wins++;
+    else if(t.outcome==='SL')byGrade[g].losses++;
+    else if(t.outcome==='BE')byGrade[g].bes++;
+  });
+  const gradeLines=[];
+  Object.entries(byGrade).forEach(([g,v])=>{
+    if(v.total<2||g==='unknown')return;
+    const wr=Math.round((v.wins/v.total)*100);
+    const aR=(v.r/v.total).toFixed(2);
+    gradeLines.push(`${g}: ${v.wins}W/${v.losses}L/${v.bes}BE (${wr}%, avg ${aR}R)`);
+  });
+
+  // by direction
+  const longs=recent.filter(t=>t.dir==='LONG');
+  const shorts=recent.filter(t=>t.dir==='SHORT');
+  const longWins=longs.filter(t=>t.outcome==='TP').length;
+  const shortWins=shorts.filter(t=>t.outcome==='TP').length;
+
+  // recent streak — last 5 trades outcome pattern
+  const lastFive=recent.slice(-5).map(t=>t.outcome==='TP'?'W':t.outcome==='SL'?'L':'BE').join('');
+
+  // detect concerning patterns
+  const warnings=[];
+  // 3+ consecutive losses
+  const last3=recent.slice(-3);
+  if(last3.length===3&&last3.every(t=>t.outcome==='SL')){
+    warnings.push('🚨 3 consecutive losses — be highly selective, avoid B/C grade setups');
+  }
+  // direction-specific recent failures
+  const last5Longs=longs.slice(-5);
+  const last5Shorts=shorts.slice(-5);
+  if(last5Longs.length>=3&&last5Longs.filter(t=>t.outcome==='SL').length>=3){
+    warnings.push(`⚠ Last LONG trades performing poorly (${last5Longs.filter(t=>t.outcome==='SL').length}/${last5Longs.length} losses) — consider waiting for stronger LONG confirmation`);
+  }
+  if(last5Shorts.length>=3&&last5Shorts.filter(t=>t.outcome==='SL').length>=3){
+    warnings.push(`⚠ Last SHORT trades performing poorly (${last5Shorts.filter(t=>t.outcome==='SL').length}/${last5Shorts.length} losses) — consider waiting for stronger SHORT confirmation`);
+  }
+
+  // best/worst grade — flag what works
+  let bestGrade=null,worstGrade=null;
+  Object.entries(byGrade).forEach(([g,v])=>{
+    if(v.total<3||g==='unknown')return;
+    const wr=v.wins/v.total*100;
+    if(!bestGrade||wr>bestGrade.wr)bestGrade={grade:g,wr:Math.round(wr),total:v.total};
+    if(!worstGrade||wr<worstGrade.wr)worstGrade={grade:g,wr:Math.round(wr),total:v.total};
+  });
+
+  // build the final string for the system prompt
+  const lines=[
+    `═══ YOUR TRADING HISTORY (auto-tracked, last ${total} trades) ═══`,
+    `Overall: ${wins}W / ${losses}L / ${bes}BE — ${winRate}% win rate, ${avgR}R avg`,
+    `Total realized: ${totalR.toFixed(2)}R`,
+    `Recent streak: ${lastFive} (newest right)`,
+  ];
+  if(gradeLines.length){
+    lines.push(`By setup grade:`);
+    gradeLines.forEach(l=>lines.push(`  - ${l}`));
+  }
+  if(longs.length>=3){
+    lines.push(`LONG: ${longWins}/${longs.length} (${Math.round(longWins/longs.length*100)}%)`);
+  }
+  if(shorts.length>=3){
+    lines.push(`SHORT: ${shortWins}/${shorts.length} (${Math.round(shortWins/shorts.length*100)}%)`);
+  }
+  if(bestGrade&&worstGrade&&bestGrade.grade!==worstGrade.grade){
+    lines.push(`📊 INSIGHT: ${bestGrade.grade} performs best (${bestGrade.wr}%, ${bestGrade.total} trades). ${worstGrade.grade} worst (${worstGrade.wr}%, ${worstGrade.total} trades).`);
+    if(worstGrade.wr<40){
+      lines.push(`→ Be MORE SELECTIVE on ${worstGrade.grade} setups — they have not been working for this user.`);
+    }
+  }
+  if(warnings.length){
+    lines.push(`⚡ ACTIVE WARNINGS:`);
+    warnings.forEach(w=>lines.push(`  ${w}`));
+  }
+  lines.push(`Use this history to adapt your aggression and grading. If a grade has poor performance, demand more confluence before calling it.`);
+  return lines.join('\n');
 }
 
 
@@ -2953,6 +3057,7 @@ ${cv.reasons.join(' | ')||'No factors confirmed yet'}`;
 function buildSystem(){
   const session=getSessionContext();
   const journal=getJournalSummary();
+  const memory=buildAgentMemory();
   const dailyStats=getDailyStats();
   const r=getRiskSettings();
   const d=htfStructure.daily,h4=htfStructure.h4,h1=htfStructure.h1;
@@ -2960,6 +3065,8 @@ function buildSystem(){
   return`You are an ICT scalp analyst. Top-down framework: HTF dictates bias, LTF gives entry. Trader holds 5–20 min — fast scalps only.
 
 IMPORTANT: There is NO daily max loss limit and NO trading restrictions. Ignore any prior "MAX LOSS" or "STOP TRADING" messages — those are stale from an old system. Always look for setups and call trades when valid, regardless of today's P&L. The trader manages their own risk.
+
+${memory||'(No personal trading history yet — build it through trades.)'}
 
 CURRENT MARKET DATA (15M / 5M / 1M):
 ${S.marketContext||'No data yet.'}
