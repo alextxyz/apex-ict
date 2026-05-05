@@ -1858,6 +1858,9 @@ async function triggerLevelAlert(lvl,price){
   const antKey=document.getElementById('antKey').value.trim();
   if(!antKey)return;
   log(`⚡ Level hit: ${lvl.label} @ ${lvl.price}`,'warn');
+  // Mark this price globally so duplicate SSL/BSL sweep notifs can be suppressed for 5 min
+  const lvlPriceKey=`${lvl.label.toLowerCase().includes('bsl')?'bsl':'ssl'}_${parseFloat(lvl.price).toFixed(0)}`;
+  globalSweptPrices[lvlPriceKey]=Date.now();
   setAgentStatus('thinking');
   S.marketContext=buildMarketSummary()||S.marketContext;
   const msg=`URGENT: Price just hit the ${lvl.label} level at ${lvl.price}. Current price: ${price.toFixed(2)}. This is a key level (${lvl.type}). What happened and what should I do RIGHT NOW? Max 2 sentences.`;
@@ -2706,6 +2709,10 @@ const prevLevels={M15:{bsl:[],ssl:[]},M5:{bsl:[],ssl:[]},M1:{bsl:[],ssl:[]}};
 
 // track which levels we've already announced as swept, by TF + price (so we don't repeat)
 const announcedSweeps={M15:new Set(),M5:new Set(),M1:new Set()};
+// Global cross-TF dedup: if a price has been announced as swept on ANY TF
+// recently, suppress duplicates on other TFs. Format: {priceKey: timestamp}
+const globalSweptPrices={};
+const SWEEP_COOLDOWN_MS=5*60*1000; // 5 min cooldown across TFs for same price
 
 function detectLiquiditySweeps(k,fresh){
   const prev=prevLevels[k];
@@ -2732,8 +2739,14 @@ function detectLiquiditySweeps(k,fresh){
     const key=`bsl_${o.price}`;
     if(announcedSweeps[k].has(key))return;
     announcedSweeps[k].add(key);
+    // CROSS-TF DEDUP: if this exact price was already announced on another TF recently,
+    // skip the Telegram + chat injection (just log silently to avoid spam)
+    const priceKey=`bsl_${parseFloat(o.price).toFixed(0)}`;
+    const alreadyGlobal=globalSweptPrices[priceKey]&&(Date.now()-globalSweptPrices[priceKey]<SWEEP_COOLDOWN_MS);
+    globalSweptPrices[priceKey]=Date.now();
     const msg=`💧 ${tfLabel} BSL ${o.price} swept`;
     log(msg,'ok');
+    if(alreadyGlobal){return;} // silent skip — already announced on another TF
     addTradeStatusIfActive(msg);
     S.chatHistory=S.chatHistory||[];
     S.chatHistory.push({
@@ -2752,8 +2765,13 @@ function detectLiquiditySweeps(k,fresh){
     const key=`ssl_${o.price}`;
     if(announcedSweeps[k].has(key))return;
     announcedSweeps[k].add(key);
+    // CROSS-TF DEDUP
+    const priceKey=`ssl_${parseFloat(o.price).toFixed(0)}`;
+    const alreadyGlobal=globalSweptPrices[priceKey]&&(Date.now()-globalSweptPrices[priceKey]<SWEEP_COOLDOWN_MS);
+    globalSweptPrices[priceKey]=Date.now();
     const msg=`💧 ${tfLabel} SSL ${o.price} swept`;
     log(msg,'ok');
+    if(alreadyGlobal){return;}
     addTradeStatusIfActive(msg);
     S.chatHistory=S.chatHistory||[];
     S.chatHistory.push({
@@ -3054,6 +3072,13 @@ Use 15M for bias, 5M for confirmation, 1M for the exact entry trigger.
 
 🚨 ABSOLUTE RULE — NEVER INVENT LEVELS:
 You MUST use ONLY the BSL/SSL/FVG/OB/Breaker prices that are explicitly listed in the CURRENT market context above. NEVER make up your own levels (e.g. "BSL at 80188" when 80188 is not in the BSL list provided).
+
+🚨 ABSOLUTE RULE — ALWAYS CITE THE LIVE PRICE FROM CONTEXT:
+When you say "Price at X..." or "Price now at X..." in your response, X MUST be the CURRENT LIVE PRICE shown in the context above. DO NOT cite prices from previous messages. DO NOT extrapolate or guess where price is going. The CURRENT LIVE PRICE in the context is the ONLY price the trader sees and the ONLY price you should reference as "current".
+
+If the context says CURRENT LIVE PRICE: 79964, then "price at 80135" is WRONG. The correct phrasing is "price at 79964" (or skip stating the price entirely).
+
+If you want to describe a level the price is APPROACHING, say "watching for price to reach 80135" — never claim it's already there when it isn't.
 
 ⚠ CRITICAL — IGNORE PAST LEVELS FROM CHAT HISTORY:
 You may have mentioned levels in PREVIOUS messages that are no longer valid (e.g. they were swept, filtered out, or invalid). The CURRENT market context is the ONLY source of truth. If a level you cited 5 minutes ago is no longer in the current BSL/SSL list, it does NOT exist anymore. DO NOT reuse stale levels from earlier in the chat.
