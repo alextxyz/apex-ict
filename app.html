@@ -2739,6 +2739,12 @@ function detectLiquiditySweeps(k,fresh){
     const key=`bsl_${o.price}`;
     if(announcedSweeps[k].has(key))return;
     announcedSweeps[k].add(key);
+    // record in persistent recent-sweeps log for active bar array logic
+    S.recentSweeps=S.recentSweeps||[];
+    S.recentSweeps.push({type:'BSL',price:parseFloat(o.price),tf:tfLabel,time:Date.now(),priceReached:recentMaxHigh});
+    // keep only last 20 sweeps from last 4h
+    const cutoff=Date.now()-4*60*60*1000;
+    S.recentSweeps=S.recentSweeps.filter(s=>s.time>cutoff).slice(-20);
     // CROSS-TF DEDUP: if this exact price was already announced on another TF recently,
     // skip the Telegram + chat injection (just log silently to avoid spam)
     const priceKey=`bsl_${parseFloat(o.price).toFixed(0)}`;
@@ -2765,6 +2771,11 @@ function detectLiquiditySweeps(k,fresh){
     const key=`ssl_${o.price}`;
     if(announcedSweeps[k].has(key))return;
     announcedSweeps[k].add(key);
+    // record in persistent recent-sweeps log
+    S.recentSweeps=S.recentSweeps||[];
+    S.recentSweeps.push({type:'SSL',price:parseFloat(o.price),tf:tfLabel,time:Date.now(),priceReached:recentMinLow});
+    const cutoff=Date.now()-4*60*60*1000;
+    S.recentSweeps=S.recentSweeps.filter(s=>s.time>cutoff).slice(-20);
     // CROSS-TF DEDUP
     const priceKey=`ssl_${parseFloat(o.price).toFixed(0)}`;
     const alreadyGlobal=globalSweptPrices[priceKey]&&(Date.now()-globalSweptPrices[priceKey]<SWEEP_COOLDOWN_MS);
@@ -3065,6 +3076,14 @@ ICT STRUCTURE — THESE LEVELS ARE DRAWN ON THE TRADER'S CHART (you must referen
 5M: price=${m5.last}|${m5.pd.pos} ${m5.pd.pct}%|SwHi:${m5.swHi.join(',')}|SwLo:${m5.swLo.join(',')}|BSL:${m5.bsl.map(o=>o.price).join(',')||'none'}|SSL:${m5.ssl.map(o=>o.price).join(',')||'none'}|FVG:${m5.fvgs.join('|')||'none'}|OB:${m5.obs.join('|')||'none'}|BRK:${m5.brk.join('|')||'none'}
 1M: price=${m1.last}|${m1.pd.pos} ${m1.pd.pct}%|FVG:${m1.fvgs.join('|')||'none'}|OB:${m1.obs.join('|')||'none'}|BRK:${m1.brk.join('|')||'none'}
 
+${(S.recentSweeps&&S.recentSweeps.length)?`📜 RECENT SWEEPS (last 4h, oldest first) — useful for ACTIVE BAR ARRAY continuation entries:
+${S.recentSweeps.map(s=>{
+  const minsAgo=Math.round((Date.now()-s.time)/60000);
+  return `  • ${s.tf} ${s.type} ${s.price} swept ${minsAgo}min ago (price reached ${s.priceReached.toFixed(2)})`;
+}).join('\n')}
+
+If a sweep happened recently and the displacement created FVG/OB/BRK zones in the move direction (bear array after BSL sweep, bull array after SSL sweep), those zones are still tradeable on a pullback even if the trader missed the original entry. Don't say "missed leg, no setup" — propose late-entry continuation at the bar array CE.
+`:''}
 ⚡ The trader SEES these zones DRAWN ON ALL 3 CHARTS (15M, 5M, 1M). When you reason, REFERENCE them by price.
 - **BSL/SSL liquidity lines** are sourced from the **5M timeframe** and shown on all three charts (consistent across all panels — these are the institutional liquidity levels that matter for scalping).
 - **FVG, OB, Breaker boxes** are timeframe-specific (each chart shows its own).
@@ -3334,6 +3353,32 @@ When monitoring an open trade:
 - Use "HTF wick CE [price] approaching — watch for reversal" alerts in your trade-management messages
 
 This is especially important on impulsive A setups where you didn't wait for full BOS confirmation — the HTF wick CE is your "smart money level" to watch for early exit signals.
+
+🎯 ACTIVE BAR ARRAY RULE (catching late entries after a sweep):
+When a sweep has ALREADY happened in the past (BSL or SSL was raided minutes/hours ago) and the trader missed the original entry, the setup is NOT necessarily dead. The displacement that followed the sweep created a "bear array" (for SHORT) or "bull array" (for LONG) — a stack of FVG, OB, and Breaker zones in the direction of the move.
+
+KEY INSIGHT: As long as those bar array zones are STILL ACTIVE on the chart (not yet filled or invalidated), and the original macro thesis is intact, the trader can enter on a PULLBACK to any of those zones — the original sweep is the confirmation.
+
+How to detect Active Bar Array opportunities:
+1. Look at the BSL/SSL list. If a level was recently swept and is no longer in the active list → that sweep happened.
+2. Check the FVG/OB/BRK zones formed AFTER that sweep timestamp (in the displacement direction).
+3. If those zones are BETWEEN the swept liquidity and the current price → they form an active bar array.
+4. Each zone's CE is a valid entry point if the trader is "late to the party".
+
+Example narrative for the trader:
+"BSL 80800 was raided ~30 min ago, displacement down created Bear FVG 80137-80177 + Bear OB 80339-80394 — bar array still active.
+You missed the original entry, but the macro thesis (premium sweep + bearish displacement) remains valid.
+Late entry options:
+1. SHORT @ 80157 (Bear FVG CE) — closer
+2. SHORT @ 80366 (Bear OB CE) — further but stronger zone
+Both target SSL 79562. Pick based on R:R preference."
+
+When the trader asks "where can I still enter?" or "did I miss it?" or "any setups left?", actively scan for active bar arrays from recent sweeps and propose continuation entries. Don't just say "missed setup" — find the late-entry path if the array is still alive.
+
+⚠ Bar array is INVALID when:
+- A zone in the array gets fully traded through (FVG filled and closed beyond, OB broken with displacement)
+- HTF bias flips (Daily premium → discount mid-trade)
+- Opposing sweep occurs (e.g. SSL swept after a BSL sweep — neutralizes the thesis)
 
 Workflow:
 1. Sweep happens → identify the FVG/OB created by displacement
